@@ -24,10 +24,25 @@ logger = logging.getLogger(__name__)
 
 HAS_MEMBER3 = False
 try:
-    from recommendation.user_recommendation import (
-        recommend_songs,
-        build_user_vector_weighted,
-    )
+    # Try multiple import paths for Member3
+    try:
+        from Member3.user_recommendation import (
+            recommend_songs as m3_recommend_songs,
+            build_user_vector_weighted as m3_build_user_vector_weighted,
+        )
+    except ImportError:
+        # Fallback: try adding Member3 to path
+        import sys
+        from pathlib import Path
+        member3_path = Path(__file__).parent.parent.parent / "Member3"
+        if member3_path.exists():
+            sys.path.insert(0, str(member3_path))
+            from user_recommendation import (
+                recommend_songs as m3_recommend_songs,
+                build_user_vector_weighted as m3_build_user_vector_weighted,
+            )
+        else:
+            raise ImportError("Member3 directory not found")
     HAS_MEMBER3 = True
     logger.info("✅ Successfully imported Member3 recommendation engine")
 except ImportError as e:

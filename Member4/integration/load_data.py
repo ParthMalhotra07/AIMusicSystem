@@ -209,16 +209,34 @@ def get_song_features(song_id: str, df: pd.DataFrame) -> Optional[pd.Series]:
 
 # Streamlit caching helpers
 def load_all_data(
-    features_path: str = "data/song_features.csv",
-    embeddings_path: str = "data/song_embeddings.npy",
-    ids_path: str = "data/song_ids.npy"
+    features_path: str = None,
+    embeddings_path: str = None,
+    ids_path: str = None
 ) -> Dict:
     """
     Load all data with a single function call (suitable for Streamlit caching).
     
+    Automatically resolves paths relative to the Member4 directory.
+    
     Returns:
         Dictionary containing all loaded data and metadata.
     """
+    from pathlib import Path
+    
+    # Get the Member4 root directory
+    member4_root = Path(__file__).parent.parent
+    data_dir = member4_root / "data"
+    
+    # Use default paths relative to Member4/data if not specified
+    if features_path is None:
+        features_path = str(data_dir / "song_features.csv")
+    if embeddings_path is None:
+        embeddings_path = str(data_dir / "song_embeddings.npy")
+    if ids_path is None:
+        ids_path = str(data_dir / "song_ids.npy")
+    
+    logger.info(f"Loading data from: {data_dir}")
+    
     features_df, features_mock = load_features(features_path)
     embeddings, song_ids, id_to_idx, embeddings_mock = load_embeddings(embeddings_path, ids_path)
     
