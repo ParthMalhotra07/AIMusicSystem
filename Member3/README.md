@@ -19,8 +19,11 @@ This module is independent of feature extraction and embedding learning.
 
 ## Inputs
 Input	              Description
+
 song_embeddings	    NumPy array of shape (N, D) from Member 2
+
 song_ids	          List of song identifiers (aligned with embeddings)
+
 user_history	      List of indices of songs listened by the user
 
 ## Outputs
@@ -46,9 +49,13 @@ If insufficient user history is available, the system recommends musically repre
 
 ## Key Functions
 normalize_embeddings()        # Ensures stable cosine similarity
+
 build_user_vector()           # Builds normalized user preference vector
+
 recommend_songs()             # Returns top-K personalized recommendations
+
 cold_start_recommendation()   # Handles new users
+
 explain_similarity()          # Supports explainable recommendations
 
 ## Design Decisions
