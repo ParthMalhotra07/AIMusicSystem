@@ -229,9 +229,11 @@ def display_recommendations(rec_ids, rec_scores, data):
                     # Card header
                     st.markdown(f"### #{idx + 1} {rec_id}")
                     
-                    # Similarity score bar
-                    score_pct = int(score * 100)
-                    st.progress(score, text=f"Similarity: {score:.3f}")
+                    # Similarity score bar - clamp to [0, 1] range for progress bar
+                    # Cosine similarity can be negative, so we normalize it
+                    score_display = max(0.0, min(1.0, score))  # Clamp to valid range
+                    score_pct = int(score_display * 100)
+                    st.progress(score_display, text=f"Similarity: {score:.3f}")
                     
                     # Song features
                     song_row = data["features_df"][data["features_df"]["song_id"] == rec_id]
