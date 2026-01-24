@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-01-24T18:30:03.088472",
+  "input_source": "../Member1/output/audio_features_20260124_002917.parquet",
+  "n_songs": 15,
+  "feature_dim": 336,
+  "embedding_dim": 14,
+  "embedding_model": "Autoencoder",
+  "embedding_score": 0.7066666666666667,
+  "clustering_model": "K-Means",
+  "n_clusters": 5,
+  "silhouette_score": 0.07867652922868729,
+  "davies_bouldin_index": 1.4274056467578085,
+  "preprocessing": "zscore"
+}

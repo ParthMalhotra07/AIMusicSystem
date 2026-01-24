@@ -1,0 +1,38 @@
+{
+  "n_clusters": 5,
+  "cluster_sizes": {
+    "0": 2,
+    "1": 5,
+    "2": 2,
+    "3": 3,
+    "4": 3
+  },
+  "clustering_method": "K-Means",
+  "songs_per_cluster": {
+    "0": [
+      "song_09",
+      "song_14"
+    ],
+    "1": [
+      "song_01",
+      "song_15",
+      "song_02",
+      "song_03",
+      "song_06"
+    ],
+    "2": [
+      "song_07",
+      "song_10"
+    ],
+    "3": [
+      "song_08",
+      "song_11",
+      "song_05"
+    ],
+    "4": [
+      "song_13",
+      "song_12",
+      "song_04"
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "song_names": [
+    "song_08",
+    "song_09",
+    "song_01",
+    "song_15",
+    "song_14",
+    "song_02",
+    "song_03",
+    "song_13",
+    "song_07",
+    "song_06",
+    "song_12",
+    "song_04",
+    "song_10",
+    "song_11",
+    "song_05"
+  ],
+  "file_paths": [
+    "../test_audio/song_08.wav",
+    "../test_audio/song_09.wav",
+    "../test_audio/song_01.wav",
+    "../test_audio/song_15.wav",
+    "../test_audio/song_14.wav",
+    "../test_audio/song_02.wav",
+    "../test_audio/song_03.wav",
+    "../test_audio/song_13.wav",
+    "../test_audio/song_07.wav",
+    "../test_audio/song_06.wav",
+    "../test_audio/song_12.wav",
+    "../test_audio/song_04.wav",
+    "../test_audio/song_10.wav",
+    "../test_audio/song_11.wav",
+    "../test_audio/song_05.wav"
+  ],
+  "n_songs": 15
+}
