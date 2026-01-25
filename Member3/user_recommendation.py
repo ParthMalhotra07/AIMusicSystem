@@ -45,19 +45,34 @@ def explain_similarity(song_a_vec, song_b_vec):
     )[0][0]
     return score
 
-# Dummy example
-file = r"C:\Users\vksin\OneDrive\Desktop\AGMT\codes\AIMusicSystem\Member2\song_embeddings.npy"
-song_embeddings = np.load(file)  # 20 songs, 64-dim embeddings
-song_embeddings = normalize_embeddings(song_embeddings)
-song_ids = [f"Song_{i}" for i in range(song_embeddings.shape[0])]
 
-user_history = [2, 5, 7]  # User listened to these songs
-if (len(user_history)<2):
-    recs = cold_start_recommendation(song_embeddings, song_ids)
-else:
-    recs = recommend_songs(song_embeddings, song_ids, user_history)
+# Only run demo code when executed directly, not when imported
+if __name__ == "__main__":
+    # Dummy example - update path for your system
+    import os
+    from pathlib import Path
+    
+    # Try to find embeddings in relative path
+    script_dir = Path(__file__).parent.parent
+    file = script_dir / "Member2" / "song_embeddings.npy"
+    
+    if not file.exists():
+        file = script_dir / "data" / "song_embeddings.npy"
+    
+    if file.exists():
+        song_embeddings = np.load(str(file))
+        song_embeddings = normalize_embeddings(song_embeddings)
+        song_ids = [f"Song_{i}" for i in range(song_embeddings.shape[0])]
 
-for song, i, score in recs:
-    print(song, "Similarity:", round(score, 3))
-similarity = explain_similarity(song_embeddings[user_history[-1]], song_embeddings[recs[0][1]])
-print(similarity)
+        user_history = [2, 5, 7]  # User listened to these songs
+        if (len(user_history)<2):
+            recs = cold_start_recommendation(song_embeddings, song_ids)
+        else:
+            recs = recommend_songs(song_embeddings, song_ids, user_history)
+
+        for song, i, score in recs:
+            print(song, "Similarity:", round(score, 3))
+        similarity = explain_similarity(song_embeddings[user_history[-1]], song_embeddings[recs[0][1]])
+        print(similarity)
+    else:
+        print(f"Embeddings file not found at {file}")
