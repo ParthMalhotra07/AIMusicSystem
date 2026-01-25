@@ -1,0 +1,15 @@
+{
+    "input_dim": 336,
+    "embedding_dim": 14,
+    "encoder_layers": [
+        128,
+        64
+    ],
+    "activation": "relu",
+    "dropout_rate": 0.2,
+    "learning_rate": 0.001,
+    "history": {
+        "train_loss": [],
+        "val_loss": []
+    }
+}

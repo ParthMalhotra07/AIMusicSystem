@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 import streamlit as st
 
 from integration.database import get_database
-from styles import CYBERPUNK_CSS, SIDEBAR_TOGGLE_BUTTON
+from styles import CYBERPUNK_CSS, SIDEBAR_TOGGLE_BUTTON, ICON_FIX_SCRIPT
 
 # Page config
 st.set_page_config(
@@ -30,12 +30,36 @@ def get_audio_path(song_id: str) -> str:
     try:
         db = get_database()
         song_info = db.get_song(song_id)
+        
+        # 1. Check database path
         if song_info and song_info.get('filepath'):
             filepath = song_info['filepath']
             if os.path.exists(filepath):
                 return filepath
-    except Exception:
-        pass
+        
+        # 2. Check standard locations
+        extensions = ['.mp3', '.wav', '.flac', '.ogg', '.m4a']
+        directories = [
+            db.audio_dir,  # data/audio_uploads
+            project_root / "data" / "audio_samples",
+            Path("data/audio_uploads"),
+            Path("data/audio_samples")
+        ]
+        
+        for directory in directories:
+            if not isinstance(directory, Path):
+                directory = Path(directory)
+            
+            if not directory.exists():
+                continue
+                
+            for ext in extensions:
+                path = directory / f"{song_id}{ext}"
+                if path.exists():
+                    return str(path)
+                    
+    except Exception as e:
+        print(f"Error finding audio for {song_id}: {e}")
     return None
 
 
@@ -43,10 +67,29 @@ def render_audio_player(song_id: str):
     """Render an audio player for a song if audio file exists."""
     audio_path = get_audio_path(song_id)
     if audio_path:
-        with open(audio_path, 'rb') as f:
-            audio_bytes = f.read()
-        st.audio(audio_bytes, format='audio/mp3')
-        return True
+        try:
+            with open(audio_path, 'rb') as f:
+                audio_bytes = f.read()
+            
+            # Determine mime type from extension
+            ext = os.path.splitext(audio_path)[1].lower()
+            if ext == '.wav':
+                mime = 'audio/wav'
+            elif ext == '.ogg':
+                mime = 'audio/ogg'
+            elif ext == '.flac':
+                mime = 'audio/flac'
+            elif ext == '.m4a':
+                mime = 'audio/mp4'
+            else:
+                mime = 'audio/mpeg'  # More compatible than audio/mp3
+                
+            st.audio(audio_bytes, format=mime)
+            return True
+        except Exception as e:
+            st.error(f"Playback error: {e}")
+            return False
+    st.warning(f"Audio not found for {song_id}")
     return False
 
 
@@ -54,6 +97,7 @@ def main():
     # Apply cyberpunk theme
     st.markdown(CYBERPUNK_CSS, unsafe_allow_html=True)
     st.markdown(SIDEBAR_TOGGLE_BUTTON, unsafe_allow_html=True)
+    st.markdown(ICON_FIX_SCRIPT, unsafe_allow_html=True)
     
     # Animated Header
     st.markdown("""
@@ -112,8 +156,19 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    # Search filter
-    search = st.text_input("🔍 Search songs", placeholder="Type to filter...")
+    # Search filter with styled container
+    st.markdown("""
+    <div style='
+        background: rgba(0,255,255,0.05);
+        border: 1px solid rgba(0,255,255,0.3);
+        border-radius: 10px;
+        padding: 10px 15px;
+        margin-bottom: 15px;
+    '>
+        <p style='color: #00ffff; margin: 0 0 5px 0; font-size: 0.9rem;'>🔍 Search your library</p>
+    </div>
+    """, unsafe_allow_html=True)
+    search = st.text_input("🔍 Search songs", placeholder="Search...", label_visibility="collapsed")
     
     # Filter songs
     if search:
@@ -193,24 +248,58 @@ def main():
                 
                 st.markdown("---")
     
-    # Delete song section
+    # Manage library section
     st.markdown("---")
-    with st.expander("🗑️ Manage Library"):
-        st.warning("⚠️ Deleting a song removes it from the database and deletes the audio file permanently.")
+    with st.expander("⚙️ Manage Library"):
+        tab1, tab2 = st.tabs(["✏️ Rename Song", "🗑️ Delete Song"])
         
-        song_to_delete = st.selectbox(
-            "Select song to delete:",
-            options=[s['song_id'] for s in playable_songs],
-            key="delete_song_select"
-        )
+        with tab1:
+            st.markdown("Rename a song to give it a custom display name.")
+            
+            song_to_rename = st.selectbox(
+                "Select song to rename:",
+                options=[s['song_id'] for s in playable_songs],
+                key="rename_song_select"
+            )
+            
+            # Get current name
+            current_song = next((s for s in playable_songs if s['song_id'] == song_to_rename), None)
+            current_name = current_song.get('filename', song_to_rename) if current_song else song_to_rename
+            
+            new_name = st.text_input(
+                "New display name:",
+                value=current_name,
+                key="new_song_name"
+            )
+            
+            if st.button("💾 Save Name", type="primary"):
+                if new_name and new_name != current_name:
+                    try:
+                        db.update_song_name(song_to_rename, new_name)
+                        st.success(f"Renamed to: {new_name}")
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error renaming: {e}")
+                else:
+                    st.warning("Please enter a different name.")
         
-        if st.button("🗑️ Delete Song", type="secondary"):
-            try:
-                db.delete_song(song_to_delete)
-                st.success(f"Deleted {song_to_delete}")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error deleting song: {e}")
+        with tab2:
+            st.warning("⚠️ Deleting a song removes it from the database and deletes the audio file permanently.")
+            
+            song_to_delete = st.selectbox(
+                "Select song to delete:",
+                options=[s['song_id'] for s in playable_songs],
+                key="delete_song_select"
+            )
+            
+            if st.button("🗑️ Delete Song", type="secondary"):
+                try:
+                    db.delete_song(song_to_delete)
+                    st.success(f"Deleted {song_to_delete}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error deleting song: {e}")
 
 
 if __name__ == "__main__":

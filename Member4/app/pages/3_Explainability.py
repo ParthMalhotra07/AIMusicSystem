@@ -19,7 +19,7 @@ from integration.load_data import load_all_data
 from integration.recommender_adapter import recommend_from_song
 from explainability.explain import explain_pair, get_similarity_summary
 from explainability.plots import plot_radar, plot_embedding_map, plot_feature_table, plot_feature_comparison
-from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER, SIDEBAR_TOGGLE_BUTTON
+from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER, SIDEBAR_TOGGLE_BUTTON, ICON_FIX_SCRIPT
 
 # Page config
 st.set_page_config(
@@ -38,6 +38,7 @@ def main():
     # Apply cyberpunk theme
     st.markdown(CYBERPUNK_CSS, unsafe_allow_html=True)
     st.markdown(SIDEBAR_TOGGLE_BUTTON, unsafe_allow_html=True)
+    st.markdown(ICON_FIX_SCRIPT, unsafe_allow_html=True)
     
     # Animated Header
     st.markdown("""

@@ -24,8 +24,10 @@ import numpy as np
 
 # Import integration modules
 from integration.database import get_database, SongDatabase
-from integration.audio_pipeline import get_pipeline, check_pipeline_status, HAS_MEMBER1, HAS_MEMBER2
-from styles import CYBERPUNK_CSS, SIDEBAR_TOGGLE_BUTTON
+from integration.audio_pipeline import get_pipeline, check_pipeline_status, HAS_MEMBER1, HAS_MEMBER2, AudioProcessingPipeline
+from explainability.plots import plot_spectrogram
+from styles import CYBERPUNK_CSS, SIDEBAR_TOGGLE_BUTTON, ICON_FIX_SCRIPT
+import librosa
 
 # Page config
 st.set_page_config(
@@ -143,6 +145,96 @@ def process_uploaded_file(uploaded_file, db: SongDatabase) -> dict:
     return result
 
 
+def process_uploaded_file_with_pipeline(uploaded_file, db: SongDatabase, pipeline) -> dict:
+    """
+    Process an uploaded audio file through a custom pipeline.
+    
+    Allows user to choose between fast mode (30s) and complete mode (full song).
+    
+    Returns dict with status and details.
+    """
+    result = {
+        'success': False,
+        'song_id': None,
+        'message': '',
+        'details': {},
+        'processing_time': 0
+    }
+    
+    import time
+    start_time = time.time()
+    
+    try:
+        # Get existing features for PCA fallback
+        existing_features, _ = db.get_all_features()
+        if len(existing_features) == 0:
+            existing_features = None
+        
+        # Save uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded_file.name).suffix) as tmp:
+            tmp.write(uploaded_file.getbuffer())
+            tmp_path = tmp.name
+        
+        try:
+            # Process through the custom pipeline
+            processed = pipeline.process_audio(tmp_path, existing_features)
+            
+            # Read audio data for storage
+            with open(tmp_path, 'rb') as f:
+                audio_data = f.read()
+            
+            # --- FEATURE EXTRACTION FIX ---
+            # Ensure metadata has scalar features (Centroid, RMS) from vector
+            feat = processed.get('features')
+            meta = processed.get('metadata', {})
+            
+            if feat is not None and len(feat) >= 35:
+                # Indices based on Member1/AudioFeatureExtractor
+                if 'spectral_centroid' not in meta or not meta['spectral_centroid']:
+                    meta['spectral_centroid'] = float(feat[26])
+                if 'rms' not in meta or not meta['rms']:
+                    meta['rms'] = float(feat[32])
+                if 'tempo_bpm' not in meta or not meta['tempo_bpm']:
+                    meta['tempo_bpm'] = float(feat[34]) if feat[34] > 0 else 120.0
+            
+            processed['metadata'] = meta
+            
+            # Add to database
+            song_id = db.add_song(
+                filename=uploaded_file.name,
+                features=processed['features'],
+                embedding=processed['embedding'],
+                metadata=processed['metadata'],
+                audio_data=audio_data
+            )
+            
+            processing_time = time.time() - start_time
+            
+            result['success'] = True
+            result['song_id'] = song_id
+            result['message'] = f"Processed in {processing_time:.1f} seconds!"
+            result['processing_time'] = processing_time
+            result['details'] = {
+                'filename': uploaded_file.name,
+                'duration': processed['metadata'].get('duration_seconds', 0),
+                'tempo': processed['metadata'].get('tempo_bpm', 0),
+                'key': processed['metadata'].get('key', 'Unknown'),
+                'feature_dim': len(processed['features']),
+                'embedding_dim': len(processed['embedding'])
+            }
+            
+        finally:
+            # Clean up temp file
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+                
+    except Exception as e:
+        result['message'] = f"Error processing file: {str(e)}"
+        import traceback
+        result['details']['error'] = traceback.format_exc()
+    
+    return result
+
 def show_database_stats(db: SongDatabase):
     """Display database statistics."""
     songs = db.get_all_songs()
@@ -214,6 +306,7 @@ def main():
     # Apply cyberpunk theme
     st.markdown(CYBERPUNK_CSS, unsafe_allow_html=True)
     st.markdown(SIDEBAR_TOGGLE_BUTTON, unsafe_allow_html=True)
+    st.markdown(ICON_FIX_SCRIPT, unsafe_allow_html=True)
     
     # Header
     st.markdown("""
@@ -240,19 +333,46 @@ def main():
     
     st.markdown("---")
     
-    # Upload section
-    st.markdown("### 📁 Upload New Song")
+    # Processing Mode Toggle
+    st.markdown("### 🎛️ Processing Mode")
     
-    st.markdown("""
-    <div style='background: rgba(0,255,255,0.1); border: 1px solid #00ffff; 
-                border-radius: 10px; padding: 15px; margin-bottom: 20px;'>
-        <p style='color: #00ffff; margin: 0;'>
-            <strong>⚡ FAST MODE:</strong> Processes in ~3-5 seconds (analyzes first 30s)<br>
-            <strong>Supported formats:</strong> MP3, WAV, FLAC, OGG, M4A<br>
-            <strong>Features extracted:</strong> MFCCs, spectral, tempo, chroma, energy
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    processing_mode = st.radio(
+        "Choose processing mode:",
+        options=["⚡ Fast Mode (30 seconds, quick)", "🎵 Complete Mode (Full song, accurate)"],
+        index=0,
+        horizontal=True,
+        help="Fast Mode: Analyzes first 30s, ~3-5 seconds processing. Complete Mode: Analyzes entire song, 512D embeddings, more accurate but slower."
+    )
+    
+    is_fast_mode = "Fast Mode" in processing_mode
+    
+    if is_fast_mode:
+        st.markdown("""
+        <div style='background: rgba(0,255,255,0.1); border: 1px solid #00ffff; 
+                    border-radius: 10px; padding: 15px; margin-bottom: 20px;'>
+            <p style='color: #00ffff; margin: 0;'>
+                <strong>⚡ FAST MODE:</strong> Processes in ~3-5 seconds (analyzes first 30s)<br>
+                <strong>Embedding:</strong> 512 dimensions for good similarity<br>
+                <strong>Best for:</strong> Quick testing and bulk uploads
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div style='background: rgba(0,255,136,0.1); border: 1px solid #00ff88; 
+                    border-radius: 10px; padding: 15px; margin-bottom: 20px;'>
+            <p style='color: #00ff88; margin: 0;'>
+                <strong>🎵 COMPLETE MODE:</strong> Analyzes ENTIRE song<br>
+                <strong>Embedding:</strong> 512 dimensions with full audio analysis<br>
+                <strong>Best for:</strong> High accuracy recommendations<br>
+                <strong>Note:</strong> Takes longer (10-60 seconds depending on song length)
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown("### 📁 Upload New Song")
+    st.markdown("**Supported formats:** MP3, WAV, FLAC, OGG, M4A")
     
     uploaded_file = st.file_uploader(
         "Choose an audio file",
@@ -266,32 +386,59 @@ def main():
         col1, col2 = st.columns([1, 3])
         
         with col1:
-            process_btn = st.button("⚡ Process & Add", type="primary", use_container_width=True)
+            btn_text = "⚡ Process Fast" if is_fast_mode else "🎵 Start Deep Analysis"
+            process_btn = st.button(btn_text, type="primary", use_container_width=True)
         
         if process_btn:
-            # Simple spinner - processing is fast now
-            with st.spinner("⚡ Processing audio (fast mode ~3-5s)..."):
-                # Process the file
-                result = process_uploaded_file(uploaded_file, db)
+            if is_fast_mode:
+                status_label = "⚡ Processing audio (Fast Mode)..."
+                max_duration = 30.0
+            else:
+                status_label = "🎵 Performing Deep Analysis (Complete Mode)..."
+                max_duration = None
+                
+            with st.status(status_label, expanded=True) as status:
+                st.write("🔧 Initializing AI pipeline components...")
+                # Create custom pipeline with selected mode
+                custom_pipeline = AudioProcessingPipeline(
+                    embedding_dim=512,
+                    fast_mode=is_fast_mode,
+                    max_duration=max_duration,
+                    use_member_pipeline=not is_fast_mode
+                )
+                
+                if not is_fast_mode:
+                    st.write("🧠 Extracting 418D deep audio features (Timbre, Rhythm, Harmony)...")
+                    st.write("⏳ This may take 15-60 seconds for a full song.")
+                else:
+                    st.write("⚡ Extracting fast features...")
+                
+                # Process the file with custom pipeline
+                result = process_uploaded_file_with_pipeline(uploaded_file, db, custom_pipeline)
+                
+                if result['success']:
+                    st.write("💾 Saving to database...")
+                    status.update(label="✅ Processing Complete!", state="complete", expanded=False)
+                else:
+                    status.update(label="❌ Processing Failed", state="error")
             # Show result
             if result['success']:
-                st.success(f"✅ {result['message']}")
-                
                 # Show details
                 details = result['details']
                 st.markdown("#### 📋 Song Details")
                 
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("⏱️ Process Time", f"{result.get('processing_time', 0):.1f}s")
-                with col2:
                     st.metric("Duration", f"{details.get('duration', 0):.1f}s")
-                with col3:
+                with col2:
                     st.metric("Tempo", f"{details.get('tempo', 0):.1f} BPM")
-                with col4:
+                with col3:
                     st.metric("Features", details.get('feature_dim', 0))
                 
                 st.info(f"🆔 Song ID: `{result['song_id']}`")
+                
+                # Clear cached data so new song appears immediately in recommendations
+                st.cache_data.clear()
                 
                 # Success message - song is now available everywhere
                 st.markdown("""
@@ -306,6 +453,23 @@ def main():
                     </p>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                # --- AUDIO VISUALIZATION (WOW FACTOR) ---
+                try:
+                    # Get path from DB to be safe
+                    saved_info = db.get_song(result['song_id'])
+                    audio_path = saved_info.get('filepath')
+                    
+                    if audio_path and os.path.exists(audio_path):
+                        with st.expander("📊 Audio Visualization (Spectrogram)", expanded=True):
+                            with st.spinner("Generating visual analysis..."):
+                                # Load only 30s for speed
+                                y, sr = librosa.load(audio_path, sr=22050, duration=30)
+                                fig = plot_spectrogram(y, sr, title=f"SPECTRAL ANALYSIS: {result['song_id']}")
+                                st.pyplot(fig, use_container_width=True)
+                except Exception as e:
+                    # Don't fail the whole page for a visual
+                    print(f"Viz error: {e}")
                 
                 # Refresh button
                 if st.button("🔄 Upload Another"):

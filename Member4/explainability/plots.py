@@ -505,6 +505,56 @@ def plot_similarity_distribution(
     return fig
 
 
+def plot_spectrogram(
+    y: np.ndarray,
+    sr: int,
+    title: str = "AUDIO SPECTROGRAM",
+    figsize: Tuple[int, int] = (10, 4)
+) -> plt.Figure:
+    """
+    Create a CYBERPUNK Mel-spectrogram visualization.
+    
+    Args:
+        y: Audio time series
+        sr: Sample rate
+        title: Chart title
+        figsize: Figure size
+        
+    Returns:
+        matplotlib Figure object
+    """
+    import librosa
+    import librosa.display
+    
+    fig, ax = plt.subplots(figsize=figsize, facecolor=COLORS["background"])
+    ax.set_facecolor(COLORS["background"])
+    
+    # Compute Mel spectrogram
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=8000)
+    S_dB = librosa.power_to_db(S, ref=np.max)
+    
+    # Plot with 'cool' colormap (cyan/magenta vibes)
+    img = librosa.display.specshow(S_dB, x_axis='time', y_axis='mel', sr=sr, 
+                                   fmax=8000, ax=ax, cmap='cool')
+    
+    # Add title with neon effect
+    ax.set_title(title, fontsize=12, fontweight='bold', color=COLORS["primary"], pad=10)
+    
+    # Style axes
+    ax.tick_params(colors='#888888')
+    ax.set_ylabel('Frequency (Hz)', color=COLORS["primary"])
+    ax.set_xlabel('Time (s)', color=COLORS["primary"])
+    
+    # Add colorbar
+    cbar = fig.colorbar(img, ax=ax, format='%+2.0f dB')
+    cbar.ax.yaxis.set_tick_params(color=COLORS["grid"])
+    cbar.outline.set_edgecolor(COLORS["grid"])
+    plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='#888888')
+    
+    plt.tight_layout()
+    return fig
+
+
 if __name__ == "__main__":
     # Test the module
     import sys

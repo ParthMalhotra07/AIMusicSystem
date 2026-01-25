@@ -17,10 +17,10 @@ import numpy as np
 import os
 
 from integration.load_data import load_all_data
-from integration.recommender_adapter import get_nearest_neighbors
+from integration.recommender_adapter import recommend_from_song
 from integration.database import get_database
 from explainability.plots import plot_embedding_map
-from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER, SIDEBAR_TOGGLE_BUTTON
+from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER, SIDEBAR_TOGGLE_BUTTON, ICON_FIX_SCRIPT
 
 # Page config
 st.set_page_config(
@@ -40,25 +40,71 @@ def get_audio_path(song_id: str) -> str:
     try:
         db = get_database()
         song_info = db.get_song(song_id)
+        
+        # 1. Check database path
         if song_info and song_info.get('filepath'):
             filepath = song_info['filepath']
             if os.path.exists(filepath):
                 return filepath
-    except Exception:
-        pass
+        
+        # 2. Check standard locations
+        extensions = ['.mp3', '.wav', '.flac', '.ogg', '.m4a']
+        directories = [
+            db.audio_dir,  # data/audio_uploads
+            project_root / "data" / "audio_samples",
+            Path("data/audio_uploads"),
+            Path("data/audio_samples")
+        ]
+        
+        for directory in directories:
+            if not isinstance(directory, Path):
+                directory = Path(directory)
+            
+            if not directory.exists():
+                continue
+                
+            for ext in extensions:
+                path = directory / f"{song_id}{ext}"
+                if path.exists():
+                    return str(path)
+                    
+    except Exception as e:
+        print(f"Error finding audio for {song_id}: {e}")
     return None
 
 
 def render_audio_player(song_id: str, label: str = None):
     """Render an audio player for a song if audio file exists."""
     audio_path = get_audio_path(song_id)
+    
+    if label:
+        st.markdown(f"<p style='color: #00ffff; margin-bottom: 5px;'>{label}</p>", unsafe_allow_html=True)
+    
     if audio_path:
-        if label:
-            st.markdown(f"<p style='color: #00ffff; margin-bottom: 5px;'>{label}</p>", unsafe_allow_html=True)
-        with open(audio_path, 'rb') as f:
-            audio_bytes = f.read()
-        st.audio(audio_bytes, format='audio/mp3')
-        return True
+        try:
+            with open(audio_path, 'rb') as f:
+                audio_bytes = f.read()
+            
+            # Determine mime type from extension
+            ext = os.path.splitext(audio_path)[1].lower()
+            if ext == '.wav':
+                mime = 'audio/wav'
+            elif ext == '.ogg':
+                mime = 'audio/ogg'
+            elif ext == '.flac':
+                mime = 'audio/flac'
+            elif ext == '.m4a':
+                mime = 'audio/mp4'
+            else:
+                mime = 'audio/mpeg'  # More compatible than audio/mp3
+                
+            st.audio(audio_bytes, format=mime)
+            return True
+        except Exception as e:
+            st.error(f"Playback error: {e}")
+            return False
+            
+    st.warning(f"Audio not found for {song_id}")
     return False
 
 
@@ -66,6 +112,7 @@ def main():
     # Apply cyberpunk theme
     st.markdown(CYBERPUNK_CSS, unsafe_allow_html=True)
     st.markdown(SIDEBAR_TOGGLE_BUTTON, unsafe_allow_html=True)
+    st.markdown(ICON_FIX_SCRIPT, unsafe_allow_html=True)
     
     # Animated Header
     st.markdown("""
@@ -134,9 +181,23 @@ def main():
     
     # Song selection
     song_ids_list = [str(sid) for sid in data["song_ids"]]
+    
+    # Add search filter for easier song finding
+    st.sidebar.markdown("<p style='color: #00ffff; margin: 15px 0 5px 0;'>🔍 Filter songs:</p>", unsafe_allow_html=True)
+    song_search = st.sidebar.text_input("Filter", placeholder="Search...", label_visibility="collapsed", key="discover_search")
+    
+    # Filter song list based on search
+    if song_search:
+        filtered_songs = [s for s in song_ids_list if song_search.lower() in s.lower()]
+        if not filtered_songs:
+            st.sidebar.warning("No songs match your filter")
+            filtered_songs = song_ids_list
+    else:
+        filtered_songs = song_ids_list
+    
     selected_song = st.sidebar.selectbox(
         "Select a song to explore:",
-        options=song_ids_list,
+        options=filtered_songs,
         index=0,
         help="Choose a song to see its position in the embedding space and nearest neighbors."
     )
@@ -159,13 +220,16 @@ def main():
     
     st.sidebar.markdown("---")
     
-    # Get nearest neighbors
-    neighbor_ids, neighbor_scores = get_nearest_neighbors(
-        song_id=selected_song,
+    # Get nearest neighbors using feature-based similarity (same as Recommender)
+    neighbor_ids, neighbor_scores = recommend_from_song(
+        seed_song_id=selected_song,
         embeddings=data["embeddings"],
         song_ids=data["song_ids"],
         id_to_idx=data["id_to_idx"],
-        k=k_neighbors
+        k=k_neighbors,
+        return_scores=True,
+        feature_matrix=data.get("feature_matrix"),
+        use_features=True
     )
     
     # ============================================

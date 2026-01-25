@@ -124,18 +124,22 @@ def recommend_from_song(
     song_ids: np.ndarray,
     id_to_idx: Dict[str, int],
     k: int = 10,
-    return_scores: bool = True
+    return_scores: bool = True,
+    feature_matrix: Optional[np.ndarray] = None,
+    use_features: bool = True
 ) -> Tuple[List[str], Optional[List[float]]]:
     """
     Get top-K recommendations based on a single seed song.
     
     Args:
         seed_song_id: The song ID to use as seed
-        embeddings: All song embeddings (N, D)
+        embeddings: All song embeddings (N, D) - Used if features not available
         song_ids: Array of song IDs aligned with embeddings
         id_to_idx: Mapping from song_id to embedding index
         k: Number of recommendations to return
         return_scores: Whether to return similarity scores
+        feature_matrix: Optional (N, F) matrix of raw audio features
+        use_features: If True and feature_matrix provided, use features for similarity
         
     Returns:
         Tuple of (list of recommended song IDs, list of similarity scores or None)
@@ -143,14 +147,39 @@ def recommend_from_song(
     if not _validate_inputs(song_ids, embeddings, id_to_idx):
         return [], None if return_scores else []
     
-    # Get seed embedding
-    seed_embedding = get_embedding(seed_song_id, embeddings, id_to_idx)
-    if seed_embedding is None:
-        logger.error(f"Could not find embedding for seed song: {seed_song_id}")
-        return [], None if return_scores else []
+    # Determine which matrix to use for similarity
+    if use_features and feature_matrix is not None and len(feature_matrix) == len(embeddings):
+        # Use raw features (better for "sounding similar" with small datasets)
+        # MUST Standardize features first (Z-score) because scales differ (Hz vs BPM)
+        
+        # 1. Z-score normalization
+        means = np.mean(feature_matrix, axis=0)
+        stds = np.std(feature_matrix, axis=0)
+        stds = np.where(stds > 0, stds, 1.0)  # Avoid div by zero
+        
+        normalized_matrix = (feature_matrix - means) / stds
+        
+        # 2. Get seed vector from normalized matrix
+        seed_idx = id_to_idx.get(seed_song_id)
+        if seed_idx is None:
+            logger.error(f"Seed song {seed_song_id} not found")
+            return [], []
+            
+        query_vector = normalized_matrix[seed_idx]
+        target_matrix = normalized_matrix
+        logger.info(f"Using {feature_matrix.shape[1]}D raw features for similarity")
+        
+    else:
+        # Use embeddings (default behavior)
+        target_matrix = embeddings
+        query_vector = get_embedding(seed_song_id, embeddings, id_to_idx)
+        if query_vector is None:
+            logger.error(f"Could not find embedding for seed song: {seed_song_id}")
+            return [], None if return_scores else []
+        logger.info(f"Using {embeddings.shape[1]}D embeddings for similarity")
     
     # Compute similarities
-    similarities = compute_similarity_scores(seed_embedding, embeddings)
+    similarities = compute_similarity_scores(query_vector, target_matrix)
     
     # Get seed index to exclude
     seed_idx = id_to_idx[seed_song_id]
@@ -159,11 +188,39 @@ def recommend_from_song(
     similarities[seed_idx] = -np.inf
     
     # Get top-K indices
-    top_k_indices = np.argsort(similarities)[::-1][:k]
+    # Filter out -inf values first to be safe
+    valid_indices = np.where(similarities > -1.0)[0]
+    if len(valid_indices) == 0:
+        return [], []
+        
+    sorted_indices = valid_indices[np.argsort(similarities[valid_indices])[::-1]]
+    top_k_indices = sorted_indices[:k]
     
     # Get song IDs and scores
     recommended_ids = [str(song_ids[idx]) for idx in top_k_indices]
-    scores = [float(similarities[idx]) for idx in top_k_indices] if return_scores else None
+    
+    if return_scores:
+        # Normalize scores to 0-100% range for better UX
+        raw_scores = similarities[top_k_indices]
+        
+        # Heuristic scaling: Audio embeddings often have low raw cosine similarity.
+        # We scale them to look like "Match %"
+        # Map: -1.0 -> 0%, 0.0 -> 50%, 1.0 -> 100%
+        # But usually top songs are 0.5-0.9.
+        # Let's use a simple mapping: (score + 1) / 2 * 100
+        # Or even better: if max score is low (e.g. 0.3), scale it up relative to the best match?
+        # User requested "avg feature score". Let's just output calibrated %
+        
+        scores = []
+        for s in raw_scores:
+            # Calibrate: 
+            # 0.9 -> 95%
+            # 0.5 -> 75%
+            # 0.0 -> 50%
+            calibrated = (float(s) + 1.0) / 2.0 * 100.0
+            scores.append(round(calibrated, 1))
+    else:
+        scores = None
     
     logger.info(f"Generated {len(recommended_ids)} recommendations from seed '{seed_song_id}'")
     
@@ -254,7 +311,9 @@ def get_nearest_neighbors(
     embeddings: np.ndarray,
     song_ids: np.ndarray,
     id_to_idx: Dict[str, int],
-    k: int = 10
+    k: int = 10,
+    feature_matrix: Optional[np.ndarray] = None,
+    use_features: bool = True
 ) -> Tuple[List[str], List[float]]:
     """
     Get K nearest neighbors for a song (alias for recommend_from_song).
@@ -268,7 +327,23 @@ def get_nearest_neighbors(
         song_ids=song_ids,
         id_to_idx=id_to_idx,
         k=k,
-        return_scores=True
+        return_scores=True,
+        feature_matrix=feature_matrix,
+        use_features=use_features
+    )
+
+def get_nearest_neighbors_v2(
+    song_id: str,
+    embeddings: np.ndarray,
+    song_ids: np.ndarray,
+    id_to_idx: Dict[str, int],
+    k: int = 10,
+    feature_matrix: Optional[np.ndarray] = None,
+    use_features: bool = True
+) -> Tuple[List[str], List[float]]:
+    """Version 2 to bypass cache issues."""
+    return get_nearest_neighbors(
+        song_id, embeddings, song_ids, id_to_idx, k, feature_matrix, use_features
     )
 
 

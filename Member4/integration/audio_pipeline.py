@@ -4,11 +4,11 @@ End-to-End Audio Processing Pipeline
 Integrates Member1 (Audio → Features) and Member2 (Features → Embeddings)
 for real-time processing of uploaded audio files.
 
-OPTIMIZED VERSION - Uses fast mode for quick processing:
-- Only processes first 30 seconds of audio
-- Lower sample rate (16000 Hz)
-- Reduced feature set for speed
-- Simplified statistics
+HIGH QUALITY VERSION:
+- Analyzes FULL song (not just first 30 seconds)
+- 512-dimensional embeddings for better discrimination
+- More audio features for accuracy
+- Higher quality similarity scores
 """
 
 import sys
@@ -110,18 +110,18 @@ class FastAudioFeatureExtractor:
     Processing time: ~2-3 seconds (vs 15-30 seconds)
     """
     
-    def __init__(self, max_duration: float = 30.0, sample_rate: int = 16000):
+    def __init__(self, max_duration: float = None, sample_rate: int = 22050):
         """
-        Initialize fast extractor.
+        Initialize feature extractor.
         
         Parameters
         ----------
-        max_duration : float
-            Maximum audio duration to process (seconds)
+        max_duration : float or None
+            Maximum audio duration to process (seconds). None = full song.
         sample_rate : int
-            Target sample rate
+            Target sample rate (22050 for better quality)
         """
-        self.max_duration = max_duration
+        self.max_duration = max_duration  # None = full song
         self.sample_rate = sample_rate
         self.n_mfcc = 13
         self.hop_length = 1024
@@ -145,12 +145,12 @@ class FastAudioFeatureExtractor:
         """
         import librosa
         
-        # Load only first N seconds
+        # Load full song (or max_duration if specified)
         y, sr = librosa.load(
             audio_path,
             sr=self.sample_rate,
             mono=True,
-            duration=self.max_duration
+            duration=self.max_duration  # None = full song
         )
         
         features = []
@@ -214,22 +214,23 @@ class AudioProcessingPipeline:
     
     Pipeline stages:
     1. Load audio file
-    2. Extract audio features (Member1 or Fast Mode)
-    3. Scale/preprocess features
-    4. Generate embeddings (Member2 or PCA)
+    2. Extract audio features (Member1 for Complete Mode, Fast Extractor for Fast Mode)
+    3. Scale/preprocess features (Member2 preprocessor)
+    4. Generate embeddings (Member2 autoencoder for Complete, custom for Fast)
     
-    FAST MODE (default): ~3-5 seconds per song
-    FULL MODE: ~15-30 seconds per song (more accurate)
+    FAST MODE: ~3-5 seconds per song, 61 features → 512D custom embedding
+    COMPLETE MODE: ~15-60 seconds per song, 336D Member1 features → 14D Member2 autoencoder embedding
     """
     
     def __init__(
         self,
         embedding_model_path: Optional[str] = None,
         preprocessor_path: Optional[str] = None,
-        embedding_dim: int = 14,
+        embedding_dim: int = 512,
         use_pca_fallback: bool = True,
         fast_mode: bool = True,
-        max_duration: float = 30.0
+        max_duration: float = None,
+        use_member_pipeline: bool = False
     ):
         """
         Initialize the audio processing pipeline.
@@ -241,61 +242,95 @@ class AudioProcessingPipeline:
         preprocessor_path : str, optional
             Path to feature preprocessor (.json)
         embedding_dim : int
-            Target embedding dimension
+            Target embedding dimension (512 for Fast Mode, 14 for Member2 autoencoder)
         use_pca_fallback : bool
             Use PCA if trained model not available
         fast_mode : bool
-            Use fast feature extraction (recommended for real-time)
-        max_duration : float
-            Max audio duration to process in seconds (fast mode only)
+            Use fast feature extraction
+        max_duration : float or None
+            Max audio duration (None = analyze full song)
+        use_member_pipeline : bool
+            If True, use Member1→Member2 full pipeline (Complete Mode)
         """
-        self.embedding_dim = embedding_dim
         self.use_pca_fallback = use_pca_fallback
         self.fast_mode = fast_mode
         self.max_duration = max_duration
+        self.use_member_pipeline = use_member_pipeline
         
-        # Initialize feature extractor
-        self.feature_extractor = None
+        # Set embedding dimension based on mode
+        if use_member_pipeline and HAS_MEMBER1 and HAS_MEMBER2:
+            self.embedding_dim = 14  # Member2 autoencoder output
+            self.feature_dim = 336   # Member1 output
+        else:
+            self.embedding_dim = embedding_dim or 512
+            self.feature_dim = 60  # Fast mode
+        
+        # Initialize feature extractors
+        self.member1_extractor = None
         self.fast_extractor = None
+        self.member2_model = None
+        self.member2_preprocessor = None
         
-        if fast_mode:
-            # Use fast extractor (always available if librosa is installed)
-            self.fast_extractor = FastAudioFeatureExtractor(
-                max_duration=max_duration,
-                sample_rate=16000
-            )
-            self.feature_dim = 60  # Approximate fast mode dimension
-            logger.info(f"⚡ Fast feature extractor initialized (max {max_duration}s, ~60 features)")
-        elif HAS_MEMBER1:
+        # COMPLETE MODE: Use Member1 + Member2
+        if use_member_pipeline and HAS_MEMBER1 and HAS_MEMBER2:
             try:
-                fast_config = create_fast_config()
-                self.feature_extractor = AudioFeatureExtractor(fast_config)
-                self.feature_dim = self.feature_extractor.feature_dim
-                logger.info(f"Feature extractor initialized (output dim: {self.feature_dim})")
+                # Initialize Member1 full feature extractor
+                self.member1_extractor = AudioFeatureExtractor()
+                self.feature_dim = self.member1_extractor.feature_dim
+                logger.info(f"🎵 Member1 AudioFeatureExtractor initialized ({self.feature_dim}D features)")
+                
+                # Load Member2 autoencoder model
+                if embedding_model_path is None:
+                    embedding_model_path = str(MEMBER2_PATH / "embedding_model.pkl")
+                
+                if os.path.exists(embedding_model_path):
+                    self.member2_model = AutoencoderModel.load(embedding_model_path)
+                    self.embedding_dim = 14  # Autoencoder output dimension
+                    logger.info(f"🔮 Member2 Autoencoder loaded ({self.embedding_dim}D embeddings)")
+                else:
+                    logger.warning(f"⚠️ Member2 model not found at {embedding_model_path}")
+                
+                # Load Member2 preprocessor
+                if preprocessor_path is None:
+                    preprocessor_path = str(MEMBER2_PATH / "preprocessor.json")
+                
+                if os.path.exists(preprocessor_path):
+                    self.member2_preprocessor = FeaturePreprocessor.load(preprocessor_path)
+                    logger.info("📊 Member2 preprocessor loaded")
+                else:
+                    logger.warning(f"⚠️ Preprocessor not found at {preprocessor_path}")
+                    
             except Exception as e:
-                logger.error(f"Failed to initialize feature extractor: {e}")
-                # Fallback to fast mode
-                self.fast_extractor = FastAudioFeatureExtractor(max_duration=max_duration)
-                self.feature_dim = 60
-        
-        # Initialize preprocessor (for scaling features)
-        self.preprocessor = None
-        if preprocessor_path and os.path.exists(preprocessor_path):
-            try:
-                self.preprocessor = FeaturePreprocessor.load(preprocessor_path)
-                logger.info(f"Preprocessor loaded from {preprocessor_path}")
-            except Exception as e:
-                logger.warning(f"Failed to load preprocessor: {e}")
-        
-        # Initialize embedding model
-        self.embedding_model = None
-        self._load_embedding_model(embedding_model_path)
+                logger.error(f"Failed to initialize Member pipeline: {e}. Falling back to Fast Mode.")
+                self.use_member_pipeline = False
+                self._init_fast_mode()
+        else:
+            # FAST MODE: Use simplified extractor
+            self._init_fast_mode()
     
+    def _init_fast_mode(self):
+        """Initialize fast mode components."""
+        # Ensure embedding dimension is sufficient for fast mode features
+        # Fast mode logic writes 61+ features into the embedding, so it needs space
+        if self.embedding_dim < 64:
+            self.embedding_dim = 512
+            
+        self.fast_extractor = FastAudioFeatureExtractor(
+            max_duration=self.max_duration,
+            sample_rate=22050
+        )
+        self.feature_dim = 60
+        duration_str = f"{self.max_duration}s" if self.max_duration else "full song"
+        logger.info(f"⚡ Fast feature extractor initialized ({duration_str}, ~60 features)")
+
     def _load_embedding_model(self, model_path: Optional[str]):
-        """Load or create embedding model."""
+        """Load or create embedding model (for fast mode only)."""
+        # Member pipeline handles its own model loading in __init__
+        if self.use_member_pipeline:
+            return
+            
         if model_path and os.path.exists(model_path):
             try:
-                # Try loading autoencoder
                 if model_path.endswith('.pt') or model_path.endswith('.pth'):
                     self.embedding_model = AutoencoderModel.load(model_path)
                     logger.info(f"Autoencoder model loaded from {model_path}")
@@ -306,17 +341,15 @@ class AudioProcessingPipeline:
             except Exception as e:
                 logger.warning(f"Failed to load embedding model: {e}")
         
-        # Use PCA fallback if no model loaded
         if self.embedding_model is None and self.use_pca_fallback and HAS_MEMBER2:
             logger.info("Using PCA fallback for embeddings")
-            # Will fit PCA on existing data when first used
-            self.embedding_model = None  # Will be created dynamically
     
     def extract_features(self, audio_path: str) -> Tuple[np.ndarray, Dict]:
         """
         Extract audio features from a file.
         
-        Uses fast extractor by default for real-time processing.
+        Complete Mode: Uses Member1 AudioFeatureExtractor (336D features)
+        Fast Mode: Uses FastAudioFeatureExtractor (~61D features)
         
         Parameters
         ----------
@@ -330,7 +363,21 @@ class AudioProcessingPipeline:
         metadata : dict
             Audio metadata (tempo, key, duration, etc.)
         """
-        # Use fast extractor if available (preferred for speed)
+        # COMPLETE MODE: Use Member1 full feature extractor
+        if self.use_member_pipeline and self.member1_extractor is not None:
+            try:
+                logger.info(f"🎵 Using Member1 AudioFeatureExtractor for {audio_path}")
+                features, metadata = self.member1_extractor.process_file(
+                    audio_path, 
+                    return_metadata=True
+                )
+                logger.info(f"   → Member1 extracted {len(features)}D features")
+                return features, metadata
+            except Exception as e:
+                logger.error(f"Member1 feature extraction failed: {e}")
+                raise
+        
+        # FAST MODE: Use fast extractor
         if self.fast_extractor is not None:
             try:
                 return self.fast_extractor.process_file(audio_path)
@@ -338,23 +385,14 @@ class AudioProcessingPipeline:
                 logger.error(f"Fast feature extraction failed: {e}")
                 raise
         
-        # Fall back to full Member1 extractor
-        if self.feature_extractor is not None:
-            try:
-                features, metadata = self.feature_extractor.process_file(
-                    audio_path, 
-                    return_metadata=True
-                )
-                return features, metadata
-            except Exception as e:
-                logger.error(f"Feature extraction failed: {e}")
-                raise
-        
         raise RuntimeError("No feature extractor available. Install librosa.")
     
     def preprocess_features(self, features: np.ndarray) -> np.ndarray:
         """
         Preprocess/scale features for embedding model.
+        
+        Complete Mode: Uses Member2 preprocessor
+        Fast Mode: Uses simple z-score normalization
         
         Parameters
         ----------
@@ -369,16 +407,17 @@ class AudioProcessingPipeline:
         if features.ndim == 1:
             features = features.reshape(1, -1)
         
-        # In fast mode, always use simple normalization (preprocessor expects 336 features)
-        if self.fast_mode:
-            # Simple z-score normalization for fast mode
-            return (features - features.mean(axis=1, keepdims=True)) / (features.std(axis=1, keepdims=True) + 1e-8)
+        # COMPLETE MODE: Use Member2 preprocessor
+        if self.use_member_pipeline and self.member2_preprocessor is not None:
+            try:
+                scaled = self.member2_preprocessor.transform(features)
+                logger.info(f"📊 Member2 preprocessor applied")
+                return scaled
+            except Exception as e:
+                logger.warning(f"Member2 preprocessing failed: {e}, using z-score")
         
-        if self.preprocessor is not None:
-            return self.preprocessor.transform(features)
-        
-        # Simple z-score normalization as fallback
-        return (features - features.mean()) / (features.std() + 1e-8)
+        # FAST MODE: Simple z-score normalization
+        return (features - features.mean(axis=1, keepdims=True)) / (features.std(axis=1, keepdims=True) + 1e-8)
     
     def generate_embedding(
         self, 
@@ -388,13 +427,8 @@ class AudioProcessingPipeline:
         """
         Generate embedding from features.
         
-        For fast mode, creates a meaningful embedding by:
-        1. Grouping features by type (MFCC, spectral, chroma, etc.)
-        2. Computing weighted averages within each group
-        3. Normalizing to unit vector for cosine similarity
-        
-        This ensures different songs with similar audio characteristics
-        will have similar embeddings.
+        Complete Mode: Uses Member2 Autoencoder (336D → 14D)
+        Fast Mode: Creates 512D embedding from feature groups
         
         Parameters
         ----------
@@ -411,9 +445,40 @@ class AudioProcessingPipeline:
         if features.ndim == 1:
             features = features.reshape(1, -1)
         
-        # In fast mode, create a meaningful embedding from feature groups
-        if self.fast_mode:
-            # Fast mode features layout (61 features):
+        # COMPLETE MODE: Use Member2 Autoencoder
+        if self.use_member_pipeline and self.member2_model is not None:
+            try:
+                # Adapt dimensions if needed
+                model_input_dim = self.member2_model.input_dim
+                current_dim = features.shape[1]
+                
+                features_adapted = features
+                if current_dim != model_input_dim:
+                    logger.warning(f"Feature dim mismatch: {current_dim} vs {model_input_dim}. Adapting...")
+                    if current_dim > model_input_dim:
+                        # Truncate
+                        features_adapted = features[:, :model_input_dim]
+                    else:
+                        # Pad with zeros
+                        padding = np.zeros((features.shape[0], model_input_dim - current_dim), dtype=features.dtype)
+                        features_adapted = np.hstack([features, padding])
+                
+                logger.info(f"🔮 Using Member2 Autoencoder ({features_adapted.shape[1]}D → {self.embedding_dim}D)")
+                embedding = self.member2_model.transform(features_adapted)
+                
+                # Normalize for cosine similarity
+                norm = np.linalg.norm(embedding, axis=1, keepdims=True)
+                embedding = embedding / (norm + 1e-8)
+                
+                logger.info(f"   → Member2 generated {embedding.shape[1]}D embedding")
+                return embedding.astype(np.float32)
+            except Exception as e:
+                logger.error(f"Member2 embedding failed: {e}")
+                # Fall through to PCA fallback
+        
+        # FAST MODE: Generate 512D embedding from feature groups
+        if not self.use_member_pipeline:
+            # Features layout (~61 features):
             # [0:13] MFCC means, [13:26] MFCC stds
             # [26:28] spectral centroid (mean, std)
             # [28:30] spectral rolloff (mean, std)
@@ -425,42 +490,196 @@ class AudioProcessingPipeline:
             
             embeddings = []
             for feat in features:
+                # Create 512-dimensional embedding
                 embedding = np.zeros(self.embedding_dim, dtype=np.float32)
                 
-                # Group 1: Timbre (MFCCs) - dims 0-3
-                if len(feat) > 13:
+                # Normalize input features to prevent scale issues
+                feat_normalized = feat / (np.abs(feat).max() + 1e-8)
+                
+                idx = 0
+                
+                # === Section 1: Raw Features (first 61 dims) ===
+                raw_len = min(len(feat_normalized), 61)
+                embedding[idx:idx+raw_len] = feat_normalized[:raw_len]
+                idx += 64  # Reserve 64 dims for raw features
+                
+                # === Section 2: MFCC Details (64 dims) ===
+                if len(feat) > 26:
                     mfcc_mean = feat[0:13]
-                    # Use first 4 MFCCs (most important for timbre)
-                    embedding[0:4] = mfcc_mean[0:4] / (np.abs(mfcc_mean[0:4]).max() + 1e-8)
+                    mfcc_std = feat[13:26]
+                    
+                    # MFCC means normalized (13 dims)
+                    embedding[idx:idx+13] = mfcc_mean / (np.abs(mfcc_mean).max() + 1e-8)
+                    idx += 13
+                    
+                    # MFCC stds normalized (13 dims)
+                    embedding[idx:idx+13] = mfcc_std / (np.abs(mfcc_std).max() + 1e-8)
+                    idx += 13
+                    
+                    # MFCC deltas (differences between adjacent coefficients) (12 dims)
+                    mfcc_deltas = np.diff(mfcc_mean)
+                    embedding[idx:idx+12] = mfcc_deltas / (np.abs(mfcc_deltas).max() + 1e-8)
+                    idx += 12
+                    
+                    # MFCC products (pairwise for first 6) (15 dims)
+                    pair_idx = 0
+                    for i in range(6):
+                        for j in range(i+1, 6):
+                            if idx + pair_idx < self.embedding_dim:
+                                embedding[idx + pair_idx] = mfcc_mean[i] * mfcc_mean[j] / 100.0
+                                pair_idx += 1
+                    idx += 15
+                    
+                    # Skip to next section
+                    idx = 128
                 
-                # Group 2: Brightness/Spectral - dims 4-6
-                if len(feat) > 32:
-                    embedding[4] = feat[26] / 5000.0  # spectral centroid (normalize ~0-5000 Hz)
-                    embedding[5] = feat[28] / 10000.0  # spectral rolloff
-                    embedding[6] = feat[30] / 3000.0  # spectral bandwidth
-                
-                # Group 3: Energy - dims 7-8
+                # === Section 3: Spectral Features Expanded (64 dims) ===
                 if len(feat) > 34:
-                    embedding[7] = feat[32] * 5.0  # RMS energy (scale up, usually 0-0.2)
-                    embedding[8] = feat[33] * 5.0  # RMS std
+                    centroid = feat[26]
+                    rolloff = feat[28]
+                    bandwidth = feat[30]
+                    rms = feat[32]
+                    tempo = feat[34] if len(feat) > 34 else 120.0
+                    
+                    # Normalized spectral features (5 dims)
+                    embedding[idx] = centroid / 5000.0
+                    embedding[idx+1] = rolloff / 10000.0
+                    embedding[idx+2] = bandwidth / 3000.0
+                    embedding[idx+3] = rms * 5.0
+                    embedding[idx+4] = (tempo - 100.0) / 60.0
+                    idx += 5
+                    
+                    # Spectral ratios (important for timbre discrimination) (10 dims)
+                    embedding[idx] = centroid / (rolloff + 1e-8)
+                    embedding[idx+1] = bandwidth / (centroid + 1e-8)
+                    embedding[idx+2] = centroid / (bandwidth + 1e-8)
+                    embedding[idx+3] = rms * centroid / 1000.0
+                    embedding[idx+4] = tempo * rms
+                    embedding[idx+5] = np.log1p(centroid) / 10.0
+                    embedding[idx+6] = np.log1p(rolloff) / 10.0
+                    embedding[idx+7] = np.log1p(bandwidth) / 10.0
+                    embedding[idx+8] = np.sqrt(centroid) / 100.0
+                    embedding[idx+9] = np.sqrt(rolloff) / 100.0
+                    idx += 10
+                    
+                    # Skip to next section
+                    idx = 192
                 
-                # Group 4: Tempo - dim 9
-                if len(feat) > 35:
-                    embedding[9] = (feat[34] - 100.0) / 60.0  # Normalize tempo (60-160 BPM range)
-                
-                # Group 5: Harmony (Chroma) - dims 10-12
-                if len(feat) > 47:
+                # === Section 4: Chroma Features Expanded (128 dims) ===
+                if len(feat) > 59:
                     chroma_mean = feat[35:47]
-                    # Summarize 12 chroma bins into 3 features
-                    embedding[10] = chroma_mean[0:4].mean()  # C, C#, D, D#
-                    embedding[11] = chroma_mean[4:8].mean()  # E, F, F#, G
-                    embedding[12] = chroma_mean[8:12].mean()  # G#, A, A#, B
+                    chroma_std = feat[47:59]
+                    
+                    # Chroma means (12 dims)
+                    embedding[idx:idx+12] = chroma_mean
+                    idx += 12
+                    
+                    # Chroma stds (12 dims)
+                    embedding[idx:idx+12] = chroma_std
+                    idx += 12
+                    
+                    # Chroma deltas (11 dims)
+                    chroma_deltas = np.diff(chroma_mean)
+                    embedding[idx:idx+11] = chroma_deltas
+                    idx += 11
+                    
+                    # Chroma cross-correlations (major key relationships) (12 dims)
+                    # Perfect 5th intervals (7 semitones)
+                    for i in range(12):
+                        fifth = (i + 7) % 12
+                        embedding[idx + i] = chroma_mean[i] * chroma_mean[fifth]
+                    idx += 12
+                    
+                    # Major 3rd intervals (4 semitones) (12 dims)
+                    for i in range(12):
+                        third = (i + 4) % 12
+                        embedding[idx + i] = chroma_mean[i] * chroma_mean[third]
+                    idx += 12
+                    
+                    # Key strength indicators (12 dims)
+                    major_template = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1])
+                    for i in range(12):
+                        rotated = np.roll(major_template, i)
+                        embedding[idx + i] = np.dot(chroma_mean, rotated)
+                    idx += 12
+                    
+                    # Skip to next section
+                    idx = 320
                 
-                # Group 6: Rhythm/Texture - dim 13
-                if len(feat) > 60:
-                    embedding[13] = feat[59] * 10.0  # ZCR (scale up)
+                # === Section 5: Statistical Features (64 dims) ===
+                # Overall feature statistics
+                embedding[idx] = np.mean(feat_normalized)
+                embedding[idx+1] = np.std(feat_normalized)
+                embedding[idx+2] = np.min(feat_normalized)
+                embedding[idx+3] = np.max(feat_normalized)
+                embedding[idx+4] = np.median(feat_normalized)
+                idx += 5
                 
-                # Normalize to unit vector for cosine similarity
+                # Feature group statistics
+                if len(feat) > 26:
+                    embedding[idx] = np.mean(feat[0:13])  # MFCC mean avg
+                    embedding[idx+1] = np.std(feat[0:13])  # MFCC mean std
+                    embedding[idx+2] = np.mean(feat[13:26])  # MFCC std avg
+                    idx += 3
+                
+                if len(feat) > 47:
+                    embedding[idx] = np.mean(feat[35:47])  # Chroma mean avg
+                    embedding[idx+1] = np.std(feat[35:47])  # Chroma mean std
+                    idx += 2
+                
+                # Skip to next section
+                idx = 384
+                
+                # === Section 6: Polynomial Feature Expansion (128 dims) ===
+                # Use key features to generate polynomial combinations
+                if len(feat) > 34:
+                    key_feats = np.array([
+                        feat[0] / 50.0,   # MFCC1
+                        feat[1] / 20.0,   # MFCC2
+                        feat[2] / 20.0,   # MFCC3
+                        feat[26] / 5000.0,  # Centroid
+                        feat[32] * 5.0,     # RMS
+                        feat[34] / 120.0    # Tempo (normalized around 120 BPM)
+                    ])
+                    
+                    # Single features (6 dims)
+                    for i, kf in enumerate(key_feats):
+                        if idx + i < self.embedding_dim:
+                            embedding[idx + i] = kf
+                    idx += 6
+                    
+                    # Squared features (6 dims)
+                    for i, kf in enumerate(key_feats):
+                        if idx + i < self.embedding_dim:
+                            embedding[idx + i] = kf ** 2
+                    idx += 6
+                    
+                    # Pairwise products (15 dims)
+                    pair_idx = 0
+                    for i in range(len(key_feats)):
+                        for j in range(i+1, len(key_feats)):
+                            if idx + pair_idx < self.embedding_dim:
+                                embedding[idx + pair_idx] = key_feats[i] * key_feats[j]
+                                pair_idx += 1
+                    idx += 15
+                    
+                    # Sinusoidal transforms for periodicity (24 dims)
+                    for i, kf in enumerate(key_feats):
+                        if idx + i*4 + 3 < self.embedding_dim:
+                            embedding[idx + i*4] = np.sin(kf * np.pi)
+                            embedding[idx + i*4 + 1] = np.cos(kf * np.pi)
+                            embedding[idx + i*4 + 2] = np.sin(kf * 2 * np.pi)
+                            embedding[idx + i*4 + 3] = np.cos(kf * 2 * np.pi)
+                    idx += 24
+                
+                # Fill remaining with random projections of features
+                remaining = self.embedding_dim - idx
+                if remaining > 0 and len(feat_normalized) > 0:
+                    np.random.seed(42)  # Reproducible projections
+                    projection_matrix = np.random.randn(len(feat_normalized), remaining) / np.sqrt(len(feat_normalized))
+                    embedding[idx:] = feat_normalized @ projection_matrix
+                
+                # L2 Normalize to unit vector for cosine similarity
                 norm = np.linalg.norm(embedding)
                 if norm > 0:
                     embedding = embedding / norm
@@ -609,8 +828,8 @@ def get_pipeline(
         _pipeline_instance = AudioProcessingPipeline(
             embedding_model_path=embedding_model_path,
             preprocessor_path=preprocessor_path,
-            fast_mode=True,  # Use fast mode by default
-            max_duration=30.0  # Only process first 30 seconds
+            fast_mode=True,  # Use feature extraction mode
+            max_duration=None  # Analyze FULL song for best quality
         )
     
     return _pipeline_instance

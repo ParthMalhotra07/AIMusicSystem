@@ -451,6 +451,26 @@ class SongDatabase:
         finally:
             conn.close()
     
+    def update_song_name(self, song_id: str, new_name: str) -> bool:
+        """Update the display name (filename) for a song."""
+        conn = sqlite3.connect(str(self.db_path))
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                'UPDATE songs SET filename = ? WHERE song_id = ?',
+                (new_name, song_id)
+            )
+            conn.commit()
+            logger.info(f"Song {song_id} renamed to {new_name}")
+            return True
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to rename song: {e}")
+            return False
+        finally:
+            conn.close()
+    
     def get_song_count(self) -> int:
         """Get total number of songs in database."""
         conn = sqlite3.connect(str(self.db_path))

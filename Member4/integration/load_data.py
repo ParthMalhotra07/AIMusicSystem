@@ -229,8 +229,11 @@ def load_from_database() -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, Dict[str
         # Get embeddings (already handles dimension alignment)
         embeddings, song_ids = db.get_all_embeddings()
         
+        # Get full feature vectors for feature-based similarity
+        feature_matrix, _ = db.get_all_features()
+        
         if len(embeddings) == 0:
-            return None, None, None, None, True
+            return None, None, None, None, None, True
         
         # Get songs with MFCC/chroma features for explainability
         songs_with_features = db.get_all_songs_with_features()
@@ -247,7 +250,7 @@ def load_from_database() -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, Dict[str
         id_to_idx = {str(sid): idx for idx, sid in enumerate(song_ids)}
         
         logger.info(f"Loaded {len(songs)} songs from database")
-        return features_df, embeddings, song_ids, id_to_idx, False
+        return features_df, embeddings, feature_matrix, song_ids, id_to_idx, False
         
     except Exception as e:
         logger.warning(f"Failed to load from database: {e}")
@@ -287,13 +290,14 @@ def load_all_data(
     
     # Try database first (includes user uploads)
     if use_database:
-        features_df, embeddings, song_ids, id_to_idx, is_empty = load_from_database()
+        features_df, embeddings, feature_matrix, song_ids, id_to_idx, is_empty = load_from_database()
         
         if not is_empty and embeddings is not None and len(embeddings) > 0:
             logger.info("Using database for data loading")
             return {
                 "features_df": features_df,
                 "embeddings": embeddings,
+                "feature_matrix": feature_matrix,
                 "song_ids": song_ids,
                 "id_to_idx": id_to_idx,
                 "is_mock": False,
