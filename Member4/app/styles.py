@@ -632,3 +632,94 @@ def get_score_bar(score: float, label: str = "") -> str:
         </div>
     </div>
     """
+
+
+# Hamburger menu button to toggle sidebar
+SIDEBAR_TOGGLE_BUTTON = """
+<style>
+/* ============================================
+   SIDEBAR TOGGLE BUTTON STYLING
+   Works for both expanded and collapsed states
+   ============================================ */
+
+/* Style the collapsed state toggle (appears when sidebar is hidden) */
+[data-testid="collapsedControl"] {
+    background: linear-gradient(135deg, #1a1a2e, #0f0f1a) !important;
+    border: 2px solid #00ffff !important;
+    border-radius: 8px !important;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3) !important;
+    top: 14px !important;
+    left: 14px !important;
+    width: 46px !important;
+    height: 42px !important;
+    padding: 0 !important;
+    transition: all 0.3s ease !important;
+    overflow: hidden !important;
+}
+
+[data-testid="collapsedControl"]:hover {
+    background: linear-gradient(135deg, #2a2a4e, #1f1f3a) !important;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.6) !important;
+    transform: scale(1.05) !important;
+    border-color: #ff00ff !important;
+}
+
+/* Hide the SVG icon and any text */
+[data-testid="collapsedControl"] svg,
+[data-testid="collapsedControl"] span {
+    display: none !important;
+}
+
+/* Create hamburger icon using pseudo-element */
+[data-testid="collapsedControl"]::before {
+    content: "≡";
+    font-size: 28px !important;
+    color: #00ffff !important;
+    text-shadow: 0 0 10px #00ffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    line-height: 38px !important;
+}
+
+[data-testid="collapsedControl"]:hover::before {
+    color: #ff00ff !important;
+    text-shadow: 0 0 15px #ff00ff !important;
+}
+
+/* Style the close/collapse button inside the sidebar (X button) */
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebar"] button[kind="header"],
+[data-testid="stSidebar"] [data-testid="baseButton-header"] {
+    background: linear-gradient(135deg, #1a1a2e, #0f0f1a) !important;
+    border: 2px solid #00ffff !important;
+    border-radius: 8px !important;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3) !important;
+    transition: all 0.3s ease !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]:hover,
+[data-testid="stSidebar"] button[kind="header"]:hover,
+[data-testid="stSidebar"] [data-testid="baseButton-header"]:hover {
+    background: linear-gradient(135deg, #2a2a4e, #1f1f3a) !important;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.6) !important;
+    border-color: #ff00ff !important;
+    transform: scale(1.05) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg,
+[data-testid="stSidebar"] button[kind="header"] svg,
+[data-testid="stSidebar"] [data-testid="baseButton-header"] svg {
+    stroke: #00ffff !important;
+    transition: all 0.3s ease !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]:hover svg,
+[data-testid="stSidebar"] button[kind="header"]:hover svg,
+[data-testid="stSidebar"] [data-testid="baseButton-header"]:hover svg {
+    stroke: #ff00ff !important;
+}
+</style>
+"""

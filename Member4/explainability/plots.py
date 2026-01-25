@@ -430,33 +430,36 @@ def plot_feature_table(
     if mfcc_cols:
         seed_mfcc = seed_row[mfcc_cols].values.astype(float)
         rec_mfcc = rec_row[mfcc_cols].values.astype(float)
-        mfcc_dist = float(np.linalg.norm(seed_mfcc - rec_mfcc))
-        
-        comparison_data.append({
-            "Category": "Timbre",
-            "Feature": "MFCC Distance (L2)",
-            f"Seed ({seed_id})": "-",
-            f"Rec ({rec_id})": "-",
-            "Difference": f"{mfcc_dist:.2f}",
-            "Diff %": "-"
-        })
+        # Handle NaN values
+        if not (np.any(np.isnan(seed_mfcc)) or np.any(np.isnan(rec_mfcc))):
+            mfcc_dist = float(np.linalg.norm(seed_mfcc - rec_mfcc))
+            comparison_data.append({
+                "Category": "Timbre",
+                "Feature": "MFCC Distance (L2)",
+                f"Seed ({seed_id})": "-",
+                f"Rec ({rec_id})": "-",
+                "Difference": f"{mfcc_dist:.2f}",
+                "Diff %": "-"
+            })
     
     # Add Chroma summary
     chroma_cols = [col for col in features_df.columns if 'chroma' in col.lower()]
     if chroma_cols:
         seed_chroma = seed_row[chroma_cols].values.astype(float).reshape(1, -1)
         rec_chroma = rec_row[chroma_cols].values.astype(float).reshape(1, -1)
-        from sklearn.metrics.pairwise import cosine_similarity
-        chroma_sim = float(cosine_similarity(seed_chroma, rec_chroma)[0, 0])
-        
-        comparison_data.append({
-            "Category": "Harmony",
-            "Feature": "Chroma Similarity",
-            f"Seed ({seed_id})": "-",
-            f"Rec ({rec_id})": "-",
-            "Difference": f"{chroma_sim:.3f}",
-            "Diff %": "-"
-        })
+        # Handle NaN values
+        if not (np.any(np.isnan(seed_chroma)) or np.any(np.isnan(rec_chroma))):
+            from sklearn.metrics.pairwise import cosine_similarity
+            chroma_sim = float(cosine_similarity(seed_chroma, rec_chroma)[0, 0])
+            
+            comparison_data.append({
+                "Category": "Harmony",
+                "Feature": "Chroma Similarity",
+                f"Seed ({seed_id})": "-",
+                f"Rec ({rec_id})": "-",
+                "Difference": f"{chroma_sim:.3f}",
+                "Diff %": "-"
+            })
     
     return pd.DataFrame(comparison_data)
 

@@ -16,7 +16,8 @@ import streamlit as st
 
 from integration.load_data import load_all_data
 from integration.recommender_adapter import recommend_from_song, recommend_from_history
-from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER
+from integration.database import get_database
+from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER, SIDEBAR_TOGGLE_BUTTON
 
 # Page config
 st.set_page_config(
@@ -26,10 +27,36 @@ st.set_page_config(
 )
 
 
-@st.cache_data
 def get_data():
-    """Load and cache all data."""
-    return load_all_data()
+    """Load data from database (always fresh)."""
+    return load_all_data(use_database=True)
+
+
+def get_audio_path(song_id: str) -> str:
+    """Get audio file path for a song if it exists."""
+    try:
+        db = get_database()
+        song_info = db.get_song(song_id)
+        if song_info and song_info.get('filepath'):
+            filepath = song_info['filepath']
+            if os.path.exists(filepath):
+                return filepath
+    except Exception:
+        pass
+    return None
+
+
+def render_audio_player(song_id: str, label: str = None):
+    """Render an audio player for a song if audio file exists."""
+    audio_path = get_audio_path(song_id)
+    if audio_path:
+        if label:
+            st.markdown(f"<p style='color: #00ffff; margin-bottom: 5px;'>{label}</p>", unsafe_allow_html=True)
+        with open(audio_path, 'rb') as f:
+            audio_bytes = f.read()
+        st.audio(audio_bytes, format='audio/mp3')
+        return True
+    return False
 
 
 def check_audio_exists(song_id: str, audio_dir: str = "data/audio_samples") -> str:
@@ -45,6 +72,7 @@ def check_audio_exists(song_id: str, audio_dir: str = "data/audio_samples") -> s
 def main():
     # Apply cyberpunk theme
     st.markdown(CYBERPUNK_CSS, unsafe_allow_html=True)
+    st.markdown(SIDEBAR_TOGGLE_BUTTON, unsafe_allow_html=True)
     
     # Animated Header
     st.markdown("""
@@ -122,6 +150,8 @@ def main():
                 index=0,
                 help="The song to base recommendations on."
             )
+            # Audio player for seed song
+            render_audio_player(seed_song, "🎧 Preview Seed Song")
         
         with col2:
             # Show seed song info
@@ -249,10 +279,8 @@ def display_recommendations(rec_ids, rec_scores, data):
                             centroid = song_row.get("spectral_centroid", "N/A")
                             st.write(f"✨ **Brightness:** {centroid:.0f}" if centroid != "N/A" else "✨ Brightness: N/A")
                     
-                    # Check for audio playback
-                    audio_path = check_audio_exists(rec_id)
-                    if audio_path:
-                        st.audio(audio_path, format="audio/wav")
+                    # Audio player from database
+                    render_audio_player(rec_id, "▶️ Play")
                     
                     st.markdown("---")
     

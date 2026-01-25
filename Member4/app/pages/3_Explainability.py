@@ -19,7 +19,7 @@ from integration.load_data import load_all_data
 from integration.recommender_adapter import recommend_from_song
 from explainability.explain import explain_pair, get_similarity_summary
 from explainability.plots import plot_radar, plot_embedding_map, plot_feature_table, plot_feature_comparison
-from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER
+from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER, SIDEBAR_TOGGLE_BUTTON
 
 # Page config
 st.set_page_config(
@@ -29,15 +29,15 @@ st.set_page_config(
 )
 
 
-@st.cache_data
 def get_data():
-    """Load and cache all data."""
-    return load_all_data()
+    """Load data from database (always fresh)."""
+    return load_all_data(use_database=True)
 
 
 def main():
     # Apply cyberpunk theme
     st.markdown(CYBERPUNK_CSS, unsafe_allow_html=True)
+    st.markdown(SIDEBAR_TOGGLE_BUTTON, unsafe_allow_html=True)
     
     # Animated Header
     st.markdown("""

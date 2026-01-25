@@ -14,11 +14,13 @@ sys.path.insert(0, str(project_root))
 
 import streamlit as st
 import numpy as np
+import os
 
 from integration.load_data import load_all_data
 from integration.recommender_adapter import get_nearest_neighbors
+from integration.database import get_database
 from explainability.plots import plot_embedding_map
-from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER
+from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER, SIDEBAR_TOGGLE_BUTTON
 
 # Page config
 st.set_page_config(
@@ -28,15 +30,42 @@ st.set_page_config(
 )
 
 
-@st.cache_data
 def get_data():
-    """Load and cache all data."""
-    return load_all_data()
+    """Load data from database (always fresh)."""
+    return load_all_data(use_database=True)
+
+
+def get_audio_path(song_id: str) -> str:
+    """Get audio file path for a song if it exists."""
+    try:
+        db = get_database()
+        song_info = db.get_song(song_id)
+        if song_info and song_info.get('filepath'):
+            filepath = song_info['filepath']
+            if os.path.exists(filepath):
+                return filepath
+    except Exception:
+        pass
+    return None
+
+
+def render_audio_player(song_id: str, label: str = None):
+    """Render an audio player for a song if audio file exists."""
+    audio_path = get_audio_path(song_id)
+    if audio_path:
+        if label:
+            st.markdown(f"<p style='color: #00ffff; margin-bottom: 5px;'>{label}</p>", unsafe_allow_html=True)
+        with open(audio_path, 'rb') as f:
+            audio_bytes = f.read()
+        st.audio(audio_bytes, format='audio/mp3')
+        return True
+    return False
 
 
 def main():
     # Apply cyberpunk theme
     st.markdown(CYBERPUNK_CSS, unsafe_allow_html=True)
+    st.markdown(SIDEBAR_TOGGLE_BUTTON, unsafe_allow_html=True)
     
     # Animated Header
     st.markdown("""
@@ -244,6 +273,9 @@ def main():
                     <span style='color: #aaa; font-size: 0.8rem;'>Similarity: {score:.3f}</span>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                # Add audio player for each similar song
+                render_audio_player(nid)
         else:
             st.warning("No neighbors found.")
     
@@ -288,6 +320,22 @@ def main():
                 st.metric("⏱️ Duration", f"{mins}:{secs:02d}")
             else:
                 st.metric("⏱️ Duration", "N/A")
+        
+        # Audio player for selected song
+        st.markdown("""
+        <div style='
+            background: rgba(0,255,136,0.05);
+            border: 1px solid #00ff88;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        '>
+            <h4 style='color: #00ff88; margin: 0 0 10px 0;'>🎵 Play Selected Song</h4>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if not render_audio_player(selected_song):
+            st.info("Audio file not available for this song. Upload songs to enable playback.")
     
     # Statistics about embedding space
     st.markdown("---")

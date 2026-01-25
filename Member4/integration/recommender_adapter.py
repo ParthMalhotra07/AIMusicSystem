@@ -82,12 +82,23 @@ def get_embedding(
     return embeddings[idx]
 
 
+def _normalize_embeddings(embeddings: np.ndarray) -> np.ndarray:
+    """Normalize embeddings to unit vectors for consistent cosine similarity."""
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    # Avoid division by zero
+    norms = np.where(norms > 0, norms, 1e-8)
+    return embeddings / norms
+
+
 def compute_similarity_scores(
     query_embedding: np.ndarray,
     embeddings: np.ndarray
 ) -> np.ndarray:
     """
     Compute cosine similarity between query and all embeddings.
+    
+    Normalizes embeddings before comparison to ensure consistent results
+    regardless of embedding magnitude.
     
     Args:
         query_embedding: Single embedding vector (1D or 2D with shape (1, D))
@@ -99,7 +110,11 @@ def compute_similarity_scores(
     if query_embedding.ndim == 1:
         query_embedding = query_embedding.reshape(1, -1)
     
-    similarities = cosine_similarity(query_embedding, embeddings)[0]
+    # Normalize both query and all embeddings for consistent comparison
+    query_norm = query_embedding / (np.linalg.norm(query_embedding) + 1e-8)
+    embeddings_norm = _normalize_embeddings(embeddings)
+    
+    similarities = cosine_similarity(query_norm, embeddings_norm)[0]
     return similarities
 
 

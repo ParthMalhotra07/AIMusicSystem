@@ -53,6 +53,9 @@ def _get_song_row(song_id: str, df: pd.DataFrame) -> Optional[pd.Series]:
 
 def _compute_tempo_similarity(tempo1: float, tempo2: float) -> float:
     """Compute tempo similarity using exponential decay."""
+    # Handle NaN values
+    if np.isnan(tempo1) or np.isnan(tempo2):
+        return 0.5  # Neutral if missing data
     diff = abs(tempo1 - tempo2)
     return float(np.exp(-diff / TEMPO_DECAY))
 
@@ -64,6 +67,11 @@ def _compute_timbre_similarity(mfcc1: np.ndarray, mfcc2: np.ndarray) -> Tuple[fl
     Returns:
         Tuple of (similarity score, L2 distance)
     """
+    # Handle None or NaN values
+    if mfcc1 is None or mfcc2 is None:
+        return 0.5, 0.0
+    if np.any(np.isnan(mfcc1)) or np.any(np.isnan(mfcc2)):
+        return 0.5, 0.0
     mfcc_dist = float(np.linalg.norm(mfcc1 - mfcc2))
     similarity = float(np.exp(-mfcc_dist / 10.0))  # Normalized decay
     return similarity, mfcc_dist
@@ -71,14 +79,23 @@ def _compute_timbre_similarity(mfcc1: np.ndarray, mfcc2: np.ndarray) -> Tuple[fl
 
 def _compute_brightness_similarity(centroid1: float, centroid2: float) -> float:
     """Compute brightness similarity from spectral centroids."""
+    # Handle NaN values
+    if np.isnan(centroid1) or np.isnan(centroid2):
+        return 0.5  # Neutral if missing data
     diff = abs(centroid1 - centroid2)
     return float(np.exp(-diff / BRIGHTNESS_DECAY))
 
 
 def _compute_harmony_similarity(chroma1: np.ndarray, chroma2: np.ndarray) -> float:
     """Compute harmony similarity from chroma features using cosine similarity."""
+    if chroma1 is None or chroma2 is None:
+        return 0.5  # Neutral if no chroma data
     if len(chroma1) == 0 or len(chroma2) == 0:
         return 0.5  # Neutral if no chroma data
+    
+    # Handle NaN values
+    if np.any(np.isnan(chroma1)) or np.any(np.isnan(chroma2)):
+        return 0.5  # Neutral if NaN present
     
     chroma1 = chroma1.reshape(1, -1)
     chroma2 = chroma2.reshape(1, -1)
@@ -87,6 +104,9 @@ def _compute_harmony_similarity(chroma1: np.ndarray, chroma2: np.ndarray) -> flo
 
 def _compute_energy_similarity(rms1: float, rms2: float) -> float:
     """Compute energy similarity from RMS values."""
+    # Handle NaN values
+    if np.isnan(rms1) or np.isnan(rms2):
+        return 0.5  # Neutral if missing data
     diff = abs(rms1 - rms2)
     return float(np.exp(-diff / ENERGY_DECAY))
 
