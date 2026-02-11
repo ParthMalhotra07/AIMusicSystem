@@ -16,7 +16,8 @@ import streamlit as st
 
 from integration.load_data import load_all_data
 from integration.recommender_adapter import recommend_from_song, recommend_from_history
-from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER
+from integration.database import get_database
+from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER, SIDEBAR_TOGGLE_BUTTON, ICON_FIX_SCRIPT
 
 # Page config
 st.set_page_config(
@@ -26,25 +27,108 @@ st.set_page_config(
 )
 
 
-@st.cache_data
 def get_data():
-    """Load and cache all data."""
-    return load_all_data()
+    """Load data from database (always fresh)."""
+    return load_all_data(use_database=True)
 
 
-def check_audio_exists(song_id: str, audio_dir: str = "data/audio_samples") -> str:
-    """Check if audio file exists for a song."""
-    extensions = [".wav", ".mp3", ".ogg", ".flac"]
-    for ext in extensions:
-        path = os.path.join(project_root, audio_dir, f"{song_id}{ext}")
-        if os.path.exists(path):
-            return path
+def get_audio_path(song_id: str) -> str:
+    """Get audio file path for a song if it exists."""
+    try:
+        db = get_database()
+        song_info = db.get_song(song_id)
+        
+        # 1. Check database path
+        if song_info and song_info.get('filepath'):
+            filepath = song_info['filepath']
+            if os.path.exists(filepath):
+                return filepath
+        
+        # 2. Check standard locations
+        extensions = ['.mp3', '.wav', '.flac', '.ogg', '.m4a']
+        directories = [
+            db.audio_dir,  # data/audio_uploads
+            project_root / "data" / "audio_samples",
+            Path("data/audio_uploads"),
+            Path("data/audio_samples")
+        ]
+        
+        for directory in directories:
+            if not isinstance(directory, Path):
+                directory = Path(directory)
+            
+            if not directory.exists():
+                continue
+                
+            for ext in extensions:
+                path = directory / f"{song_id}{ext}"
+                if path.exists():
+                    print(f"🎵 Found audio at: {path}")  # Debug print
+                    return str(path)
+                    
+    except Exception as e:
+        print(f"Error finding audio for {song_id}: {e}")
     return None
+
+
+def render_audio_player(song_id: str, label: str = None):
+    """Render an audio player for a song if audio file exists."""
+    audio_path = get_audio_path(song_id)
+    
+    if label:
+        st.markdown(f"<p style='color: #00ffff; margin-bottom: 5px;'>{label}</p>", unsafe_allow_html=True)
+    
+    if audio_path:
+        try:
+            # Debug: show path being used
+            # st.caption(f"📂 {audio_path}")
+            
+            with open(audio_path, 'rb') as f:
+                audio_bytes = f.read()
+            
+            if len(audio_bytes) == 0:
+                st.error("Audio file is empty")
+                return False
+            
+            # Determine mime type from extension
+            ext = os.path.splitext(audio_path)[1].lower()
+            if ext == '.wav':
+                mime = 'audio/wav'
+            elif ext == '.ogg':
+                mime = 'audio/ogg'
+            elif ext == '.flac':
+                mime = 'audio/flac'
+            elif ext == '.m4a':
+                mime = 'audio/mp4'
+            else:
+                mime = 'audio/mpeg'  # Changed from audio/mp3 to audio/mpeg (more compatible)
+                
+            st.audio(audio_bytes, format=mime)
+            return True
+        except FileNotFoundError:
+            st.error(f"File not found: {audio_path}")
+            return False
+        except PermissionError:
+            st.error(f"Permission denied: {audio_path}")
+            return False
+        except Exception as e:
+            st.error(f"Error: {type(e).__name__}: {e}")
+            return False
+            
+    st.warning(f"Audio not found for {song_id}")
+    return False
+
+
+def check_audio_exists(song_id: str, audio_dir: str = None) -> str:
+    """Check if audio file exists for a song."""
+    return get_audio_path(song_id)
 
 
 def main():
     # Apply cyberpunk theme
     st.markdown(CYBERPUNK_CSS, unsafe_allow_html=True)
+    st.markdown(SIDEBAR_TOGGLE_BUTTON, unsafe_allow_html=True)
+    st.markdown(ICON_FIX_SCRIPT, unsafe_allow_html=True)
     
     # Animated Header
     st.markdown("""
@@ -76,15 +160,9 @@ def main():
     
     st.markdown("---")
     
-    # Recommendation mode selection
-    mode = st.radio(
-        "**Recommendation Mode:**",
-        options=["Single Seed Track", "Listening History"],
-        horizontal=True,
-        help="Choose how to generate recommendations."
-    )
-    
-    st.markdown("---")
+    # Single seed mode (no mode selection - just simple interface)
+    st.subheader("🎵 Single Seed Recommendation")
+    st.markdown("Select a song to find similar tracks.")
     
     # Song list for selection
     song_ids_list = [str(sid) for sid in data["song_ids"]]
@@ -101,108 +179,65 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.markdown("### About")
     st.sidebar.markdown("""
-    Recommendations are based on **cosine similarity** 
-    in the learned audio embedding space.
+    Recommendations are based on **audio feature similarity**.
     
-    - **Single Seed**: Find songs similar to one track
-    - **Listening History**: Find songs similar to your taste profile
+    Songs with similar tempo, timbre, and energy will be ranked higher.
     """)
     
-    if mode == "Single Seed Track":
-        # Single seed mode
-        st.subheader("🎵 Single Seed Recommendation")
-        st.markdown("Select a song to find similar tracks.")
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        # Search filter for songs
+        st.markdown("<p style='color: #00ffff; margin-bottom: 5px;'>🔍 Filter songs:</p>", unsafe_allow_html=True)
+        seed_search = st.text_input("Filter", placeholder="Search...", label_visibility="collapsed", key="seed_search")
         
-        col1, col2 = st.columns([2, 1])
+        # Filter song list based on search
+        if seed_search:
+            filtered_seeds = [s for s in song_ids_list if seed_search.lower() in s.lower()]
+            if not filtered_seeds:
+                filtered_seeds = song_ids_list
+        else:
+            filtered_seeds = song_ids_list
         
-        with col1:
-            seed_song = st.selectbox(
-                "Choose your seed song:",
-                options=song_ids_list,
-                index=0,
-                help="The song to base recommendations on."
+        seed_song = st.selectbox(
+            "Choose your seed song:",
+            options=filtered_seeds,
+            index=0,
+            help="The song to base recommendations on."
+        )
+        # Audio player for seed song
+        render_audio_player(seed_song, "🎧 Preview Seed Song")
+    
+    with col2:
+        # Show seed song info
+        seed_row = data["features_df"][data["features_df"]["song_id"] == seed_song]
+        if len(seed_row) > 0:
+            seed_row = seed_row.iloc[0]
+            tempo = seed_row.get("tempo", "N/A")
+            st.metric("Seed Tempo", f"{tempo:.0f} BPM" if tempo != "N/A" else "N/A")
+    
+    # Generate recommendations
+    if st.button("🎯 Get Recommendations", type="primary", use_container_width=True):
+        with st.spinner("Finding similar songs..."):
+            rec_ids, rec_scores = recommend_from_song(
+                seed_song_id=seed_song,
+                embeddings=data["embeddings"],
+                song_ids=data["song_ids"],
+                id_to_idx=data["id_to_idx"],
+                k=k_recs,
+                feature_matrix=data.get("feature_matrix"),
+                use_features=True  # Use raw audio features for better similarity
             )
         
-        with col2:
-            # Show seed song info
-            seed_row = data["features_df"][data["features_df"]["song_id"] == seed_song]
-            if len(seed_row) > 0:
-                seed_row = seed_row.iloc[0]
-                tempo = seed_row.get("tempo", "N/A")
-                st.metric("Seed Tempo", f"{tempo:.0f} BPM" if tempo != "N/A" else "N/A")
+        st.success(f"Found {len(rec_ids)} recommendations based on **{seed_song}**!")
         
-        # Generate recommendations
-        if st.button("🎯 Get Recommendations", type="primary", use_container_width=True):
-            with st.spinner("Finding similar songs..."):
-                rec_ids, rec_scores = recommend_from_song(
-                    seed_song_id=seed_song,
-                    embeddings=data["embeddings"],
-                    song_ids=data["song_ids"],
-                    id_to_idx=data["id_to_idx"],
-                    k=k_recs
-                )
-            
-            st.success(f"Found {len(rec_ids)} recommendations based on **{seed_song}**!")
-            
-            # Store in session state for explainability page
-            st.session_state["last_seed"] = seed_song
-            st.session_state["last_recommendations"] = rec_ids
-            st.session_state["last_scores"] = rec_scores
-            
-            # Display recommendations
-            display_recommendations(rec_ids, rec_scores, data)
-    
-    else:
-        # Listening history mode
-        st.subheader("📚 Listening History Recommendation")
-        st.markdown("Select multiple songs to build your taste profile.")
+        # Store in session state for explainability page
+        st.session_state["last_seed"] = seed_song
+        st.session_state["last_recommendations"] = rec_ids
+        st.session_state["last_scores"] = rec_scores
         
-        # Multi-select for history
-        history_songs = st.multiselect(
-            "Build your listening history:",
-            options=song_ids_list,
-            default=song_ids_list[:3] if len(song_ids_list) >= 3 else song_ids_list[:1],
-            help="Select songs you've enjoyed. Recommendations will match your combined taste."
-        )
-        
-        if history_songs:
-            st.markdown(f"**Selected {len(history_songs)} songs** for taste profile.")
-            
-            # Show selected songs in a compact view
-            with st.expander("View selected songs"):
-                for song_id in history_songs:
-                    song_row = data["features_df"][data["features_df"]["song_id"] == song_id]
-                    if len(song_row) > 0:
-                        tempo = song_row.iloc[0].get("tempo", "N/A")
-                        tempo_str = f"{tempo:.0f} BPM" if tempo != "N/A" else ""
-                        st.write(f"• **{song_id}** {tempo_str}")
-            
-            # Generate recommendations
-            if st.button("🎯 Get Recommendations", type="primary", use_container_width=True):
-                with st.spinner("Analyzing your taste profile..."):
-                    rec_ids, rec_scores = recommend_from_history(
-                        history_song_ids=history_songs,
-                        embeddings=data["embeddings"],
-                        song_ids=data["song_ids"],
-                        id_to_idx=data["id_to_idx"],
-                        k=k_recs
-                    )
-                
-                st.success(
-                    f"Found {len(rec_ids)} recommendations based on "
-                    f"your {len(history_songs)}-song listening history!"
-                )
-                
-                # Store in session state
-                st.session_state["last_seed"] = history_songs[0]  # Use first as reference
-                st.session_state["last_history"] = history_songs
-                st.session_state["last_recommendations"] = rec_ids
-                st.session_state["last_scores"] = rec_scores
-                
-                # Display recommendations
-                display_recommendations(rec_ids, rec_scores, data)
-        else:
-            st.warning("Please select at least one song to build your listening history.")
+        # Display recommendations
+        display_recommendations(rec_ids, rec_scores, data)
 
 
 def display_recommendations(rec_ids, rec_scores, data):
@@ -229,13 +264,43 @@ def display_recommendations(rec_ids, rec_scores, data):
                     # Card header
                     st.markdown(f"### #{idx + 1} {rec_id}")
                     
-                    # Similarity score bar - clamp to [0, 1] range for progress bar
-                    # Cosine similarity can be negative, so we normalize it
-                    score_display = max(0.0, min(1.0, score))  # Clamp to valid range
-                    score_pct = int(score_display * 100)
-                    st.progress(score_display, text=f"Similarity: {score:.3f}")
+                    # Score is now 0-100 from adapter
+                    score_val = float(score)
+                    score_display = max(0.0, min(100.0, score_val)) / 100.0
                     
-                    # Song features
+                    st.progress(score_display)
+                    st.caption(f"**Avg Feature Score:** {score_val:.1f}%")
+                    
+                    # --- MATCH TAGS (EXPLAINABILITY) ---
+                    tags = []
+                    seed_id = st.session_state.get("last_seed")
+                    if seed_id:
+                        seed_row = data["features_df"][data["features_df"]["song_id"] == seed_id]
+                        rec_row = data["features_df"][data["features_df"]["song_id"] == rec_id]
+                        
+                        if not seed_row.empty and not rec_row.empty:
+                            s_tempo = seed_row.iloc[0].get('tempo', 0)
+                            r_tempo = rec_row.iloc[0].get('tempo', 0)
+                            s_rms = seed_row.iloc[0].get('rms', 0)
+                            r_rms = rec_row.iloc[0].get('rms', 0)
+                            
+                            # Tempo Check
+                            if abs(s_tempo - r_tempo) < 5:
+                                tags.append("🥁 Rhythm Twin")
+                            elif abs(s_tempo - r_tempo) < 15:
+                                tags.append("🎵 Similar Vibe")
+                                
+                            # Energy Check
+                            if abs(s_rms - r_rms) < 0.05:
+                                tags.append("⚡ Energy Match")
+                            elif r_rms > 0.2:
+                                tags.append("🔥 High Intensity")
+                    
+                    if tags:
+                        tag_html = " ".join([f"<span style='background:rgba(255,0,255,0.2); color:#ff00ff; padding:2px 6px; border-radius:4px; font-size:0.8em; margin-right:4px;'>{t}</span>" for t in tags[:2]])
+                        st.markdown(f"<div style='margin-bottom:8px;'>{tag_html}</div>", unsafe_allow_html=True)
+
+                    # Song details
                     song_row = data["features_df"][data["features_df"]["song_id"] == rec_id]
                     if len(song_row) > 0:
                         song_row = song_row.iloc[0]
@@ -249,10 +314,8 @@ def display_recommendations(rec_ids, rec_scores, data):
                             centroid = song_row.get("spectral_centroid", "N/A")
                             st.write(f"✨ **Brightness:** {centroid:.0f}" if centroid != "N/A" else "✨ Brightness: N/A")
                     
-                    # Check for audio playback
-                    audio_path = check_audio_exists(rec_id)
-                    if audio_path:
-                        st.audio(audio_path, format="audio/wav")
+                    # Audio player from database
+                    render_audio_player(rec_id, "▶️ Play")
                     
                     st.markdown("---")
     

@@ -252,4 +252,4 @@ Returns 5-component analysis for explainability
 
 ---
 
-**Status:** ✅ Production Ready | **DUHacks 5** | **2024**
+**Status:** ✅ Production Ready | **DUHacks 5** | **2026**

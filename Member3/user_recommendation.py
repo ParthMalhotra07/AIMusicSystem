@@ -30,7 +30,7 @@ def recommend_songs(song_embeddings, song_ids, user_history, top_k=5):
 
     top_indices = similarities.argsort()[::-1][:top_k]
 
-    recommendations = [(song_ids[i],i, similarities[i]) for i in top_indices]
+    recommendations = [(song_ids[i],i, similarities[i]) for i in top_indices if (similarities[i]>0)]
     return recommendations
 
 def cold_start_recommendation(song_embeddings, song_ids, top_k=5):

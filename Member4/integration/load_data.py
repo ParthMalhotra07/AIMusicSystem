@@ -207,16 +207,77 @@ def get_song_features(song_id: str, df: pd.DataFrame) -> Optional[pd.Series]:
     return row.iloc[0]
 
 
+def load_from_database() -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, Dict[str, int], bool]:
+    """
+    Load data from the SQLite database (includes user-uploaded songs).
+    
+    Returns:
+        Tuple of (features_df, embeddings, song_ids, id_to_idx, is_empty)
+    """
+    try:
+        from .database import get_database
+        
+        db = get_database()
+        
+        # Get all songs from database
+        songs = db.get_all_songs()
+        
+        if not songs:
+            logger.info("Database is empty, will use file-based loading")
+            return None, None, None, None, True
+        
+        # Get embeddings (already handles dimension alignment)
+        embeddings, song_ids = db.get_all_embeddings()
+        
+        # Get full feature vectors for feature-based similarity
+        feature_matrix, _ = db.get_all_features()
+        
+        if len(embeddings) == 0:
+            return None, None, None, None, None, True
+        
+        # Get songs with MFCC/chroma features for explainability
+        songs_with_features = db.get_all_songs_with_features()
+        
+        # Build features DataFrame with MFCC and chroma columns
+        features_df = pd.DataFrame(songs_with_features)
+        
+        # Ensure required columns exist
+        for col in ['song_id', 'tempo', 'spectral_centroid', 'rms', 'duration_sec']:
+            if col not in features_df.columns:
+                features_df[col] = 0
+        
+        # Build id_to_idx mapping
+        id_to_idx = {str(sid): idx for idx, sid in enumerate(song_ids)}
+        
+        logger.info(f"Loaded {len(songs)} songs from database")
+        return features_df, embeddings, feature_matrix, song_ids, id_to_idx, False
+        
+    except Exception as e:
+        logger.warning(f"Failed to load from database: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None, None, None, True
+
+
 # Streamlit caching helpers
 def load_all_data(
     features_path: str = None,
     embeddings_path: str = None,
-    ids_path: str = None
+    ids_path: str = None,
+    use_database: bool = True
 ) -> Dict:
     """
     Load all data with a single function call (suitable for Streamlit caching).
     
     Automatically resolves paths relative to the Member4 directory.
+    First tries to load from database (includes user-uploaded songs),
+    then falls back to file-based loading.
+    
+    Parameters:
+        features_path: Path to features CSV (optional)
+        embeddings_path: Path to embeddings NPY (optional)
+        ids_path: Path to song IDs NPY (optional)
+        use_database: Whether to try loading from database first
     
     Returns:
         Dictionary containing all loaded data and metadata.
@@ -226,6 +287,29 @@ def load_all_data(
     # Get the Member4 root directory
     member4_root = Path(__file__).parent.parent
     data_dir = member4_root / "data"
+    
+    # Try database first (includes user uploads)
+    if use_database:
+        features_df, embeddings, feature_matrix, song_ids, id_to_idx, is_empty = load_from_database()
+        
+        if not is_empty and embeddings is not None and len(embeddings) > 0:
+            logger.info("Using database for data loading")
+            return {
+                "features_df": features_df,
+                "embeddings": embeddings,
+                "feature_matrix": feature_matrix,
+                "song_ids": song_ids,
+                "id_to_idx": id_to_idx,
+                "is_mock": False,
+                "num_songs": len(song_ids),
+                "embedding_dim": embeddings.shape[1] if len(embeddings.shape) > 1 else 0,
+                "has_chroma": False,  # Database doesn't store individual chroma
+                "has_rms": "rms" in features_df.columns,
+                "source": "database"
+            }
+    
+    # Fall back to file-based loading
+    logger.info("Using file-based data loading")
     
     # Use default paths relative to Member4/data if not specified
     if features_path is None:
@@ -262,6 +346,7 @@ def load_all_data(
         "embedding_dim": embeddings.shape[1],
         "has_chroma": has_chroma_features(features_df),
         "has_rms": has_rms_feature(features_df),
+        "source": "files"
     }
 
 

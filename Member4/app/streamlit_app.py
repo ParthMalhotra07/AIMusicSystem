@@ -23,7 +23,7 @@ st.set_page_config(
 )
 
 # Import cyberpunk styles
-from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER, HEADPHONES_ANIMATION, get_cyber_card, get_neon_header
+from styles import CYBERPUNK_CSS, MUSIC_VISUALIZER, HEADPHONES_ANIMATION, get_cyber_card, get_neon_header, SIDEBAR_TOGGLE_BUTTON, ICON_FIX_SCRIPT
 
 # Import data loaders
 from integration.load_data import load_all_data
@@ -31,11 +31,16 @@ from integration.load_data import load_all_data
 # Apply cyberpunk theme
 st.markdown(CYBERPUNK_CSS, unsafe_allow_html=True)
 
+# Add hamburger menu button for sidebar toggle
+st.markdown(SIDEBAR_TOGGLE_BUTTON, unsafe_allow_html=True)
 
-@st.cache_data
+# Inject JavaScript to fix keyboard icon text rendering
+st.markdown(ICON_FIX_SCRIPT, unsafe_allow_html=True)
+
+
 def get_data():
-    """Load and cache all data."""
-    return load_all_data()
+    """Load data from database (always fresh)."""
+    return load_all_data(use_database=True)
 
 
 def main():
@@ -60,9 +65,10 @@ def main():
     
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🚀 Quick Links")
-    st.sidebar.page_link("pages/1_Discover.py", label="🔍 Discover Music Space", icon="🔍")
-    st.sidebar.page_link("pages/2_Recommender.py", label="🎯 Get Recommendations", icon="🎯")
-    st.sidebar.page_link("pages/3_Explainability.py", label="📊 See Explanations", icon="📊")
+    st.sidebar.page_link("pages/1_Discover.py", label="Discover Music Space", icon="🔍")
+    st.sidebar.page_link("pages/2_Recommender.py", label="Get Recommendations", icon="🎯")
+    st.sidebar.page_link("pages/3_Explainability.py", label="See Explanations", icon="📊")
+    st.sidebar.page_link("pages/4_Upload.py", label="Upload New Songs", icon="📤")
     
     # Load data
     with st.spinner("⚡ Initializing neural pathways..."):

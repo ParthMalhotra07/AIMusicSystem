@@ -430,33 +430,36 @@ def plot_feature_table(
     if mfcc_cols:
         seed_mfcc = seed_row[mfcc_cols].values.astype(float)
         rec_mfcc = rec_row[mfcc_cols].values.astype(float)
-        mfcc_dist = float(np.linalg.norm(seed_mfcc - rec_mfcc))
-        
-        comparison_data.append({
-            "Category": "Timbre",
-            "Feature": "MFCC Distance (L2)",
-            f"Seed ({seed_id})": "-",
-            f"Rec ({rec_id})": "-",
-            "Difference": f"{mfcc_dist:.2f}",
-            "Diff %": "-"
-        })
+        # Handle NaN values
+        if not (np.any(np.isnan(seed_mfcc)) or np.any(np.isnan(rec_mfcc))):
+            mfcc_dist = float(np.linalg.norm(seed_mfcc - rec_mfcc))
+            comparison_data.append({
+                "Category": "Timbre",
+                "Feature": "MFCC Distance (L2)",
+                f"Seed ({seed_id})": "-",
+                f"Rec ({rec_id})": "-",
+                "Difference": f"{mfcc_dist:.2f}",
+                "Diff %": "-"
+            })
     
     # Add Chroma summary
     chroma_cols = [col for col in features_df.columns if 'chroma' in col.lower()]
     if chroma_cols:
         seed_chroma = seed_row[chroma_cols].values.astype(float).reshape(1, -1)
         rec_chroma = rec_row[chroma_cols].values.astype(float).reshape(1, -1)
-        from sklearn.metrics.pairwise import cosine_similarity
-        chroma_sim = float(cosine_similarity(seed_chroma, rec_chroma)[0, 0])
-        
-        comparison_data.append({
-            "Category": "Harmony",
-            "Feature": "Chroma Similarity",
-            f"Seed ({seed_id})": "-",
-            f"Rec ({rec_id})": "-",
-            "Difference": f"{chroma_sim:.3f}",
-            "Diff %": "-"
-        })
+        # Handle NaN values
+        if not (np.any(np.isnan(seed_chroma)) or np.any(np.isnan(rec_chroma))):
+            from sklearn.metrics.pairwise import cosine_similarity
+            chroma_sim = float(cosine_similarity(seed_chroma, rec_chroma)[0, 0])
+            
+            comparison_data.append({
+                "Category": "Harmony",
+                "Feature": "Chroma Similarity",
+                f"Seed ({seed_id})": "-",
+                f"Rec ({rec_id})": "-",
+                "Difference": f"{chroma_sim:.3f}",
+                "Diff %": "-"
+            })
     
     return pd.DataFrame(comparison_data)
 
@@ -497,6 +500,56 @@ def plot_similarity_distribution(
     ax.set_title(title, fontsize=14, fontweight='bold')
     ax.legend(loc='upper left')
     ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+    
+    plt.tight_layout()
+    return fig
+
+
+def plot_spectrogram(
+    y: np.ndarray,
+    sr: int,
+    title: str = "AUDIO SPECTROGRAM",
+    figsize: Tuple[int, int] = (10, 4)
+) -> plt.Figure:
+    """
+    Create a CYBERPUNK Mel-spectrogram visualization.
+    
+    Args:
+        y: Audio time series
+        sr: Sample rate
+        title: Chart title
+        figsize: Figure size
+        
+    Returns:
+        matplotlib Figure object
+    """
+    import librosa
+    import librosa.display
+    
+    fig, ax = plt.subplots(figsize=figsize, facecolor=COLORS["background"])
+    ax.set_facecolor(COLORS["background"])
+    
+    # Compute Mel spectrogram
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=8000)
+    S_dB = librosa.power_to_db(S, ref=np.max)
+    
+    # Plot with 'cool' colormap (cyan/magenta vibes)
+    img = librosa.display.specshow(S_dB, x_axis='time', y_axis='mel', sr=sr, 
+                                   fmax=8000, ax=ax, cmap='cool')
+    
+    # Add title with neon effect
+    ax.set_title(title, fontsize=12, fontweight='bold', color=COLORS["primary"], pad=10)
+    
+    # Style axes
+    ax.tick_params(colors='#888888')
+    ax.set_ylabel('Frequency (Hz)', color=COLORS["primary"])
+    ax.set_xlabel('Time (s)', color=COLORS["primary"])
+    
+    # Add colorbar
+    cbar = fig.colorbar(img, ax=ax, format='%+2.0f dB')
+    cbar.ax.yaxis.set_tick_params(color=COLORS["grid"])
+    cbar.outline.set_edgecolor(COLORS["grid"])
+    plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='#888888')
     
     plt.tight_layout()
     return fig

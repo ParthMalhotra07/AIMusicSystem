@@ -13,6 +13,11 @@ CYBERPUNK_CSS = """
 /* Import Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
 
+/* Import Material Icons - fixes the text rendering issue for sidebar/expander icons */
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded');
+
 /* Root variables */
 :root {
     --neon-pink: #ff00ff;
@@ -228,6 +233,97 @@ p, span, label, .stMarkdown p {
 }
 
 /* ============================================
+   TEXT INPUT - COMPREHENSIVE STYLING
+   ============================================ */
+
+/* Text input container */
+.stTextInput > div > div {
+    background: var(--card-bg) !important;
+    border: 1px solid rgba(0, 255, 255, 0.3) !important;
+    border-radius: 8px !important;
+    padding: 2px !important;
+}
+
+.stTextInput > div > div:focus-within {
+    border-color: var(--neon-cyan) !important;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.4) !important;
+}
+
+/* The actual input element */
+.stTextInput input {
+    background: transparent !important;
+    color: #e0e0e0 !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 1rem !important;
+    padding: 10px 15px !important;
+    border: none !important;
+    width: 100% !important;
+    min-width: 200px !important;
+}
+
+/* Placeholder text styling - crucial fix for truncation */
+.stTextInput input::placeholder {
+    color: rgba(0, 255, 255, 0.5) !important;
+    font-style: italic !important;
+    opacity: 1 !important;
+    text-overflow: ellipsis !important;
+}
+
+.stTextInput input::-webkit-input-placeholder {
+    color: rgba(0, 255, 255, 0.5) !important;
+    font-style: italic !important;
+}
+
+.stTextInput input::-moz-placeholder {
+    color: rgba(0, 255, 255, 0.5) !important;
+    font-style: italic !important;
+}
+
+.stTextInput input:-ms-input-placeholder {
+    color: rgba(0, 255, 255, 0.5) !important;
+    font-style: italic !important;
+}
+
+/* Input label styling */
+.stTextInput > label {
+    color: var(--neon-cyan) !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 0.9rem !important;
+    letter-spacing: 0.5px !important;
+}
+
+/* Number input styling */
+.stNumberInput > div > div {
+    background: var(--card-bg) !important;
+    border: 1px solid rgba(0, 255, 255, 0.3) !important;
+    border-radius: 8px !important;
+}
+
+.stNumberInput input {
+    background: transparent !important;
+    color: #e0e0e0 !important;
+}
+
+/* Text area styling */
+.stTextArea > div > div {
+    background: var(--card-bg) !important;
+    border: 1px solid rgba(0, 255, 255, 0.3) !important;
+    border-radius: 8px !important;
+}
+
+.stTextArea textarea {
+    background: transparent !important;
+    color: #e0e0e0 !important;
+    font-family: 'Rajdhani', sans-serif !important;
+}
+
+.stTextArea textarea::placeholder {
+    color: rgba(0, 255, 255, 0.5) !important;
+    font-style: italic !important;
+}
+
+/* ============================================
    PROGRESS BARS - NEON
    ============================================ */
 
@@ -282,14 +378,172 @@ p, span, label, .stMarkdown p {
 }
 
 /* ============================================
-   EXPANDERS
+   EXPANDERS - IMPROVED STYLING
    ============================================ */
 
 .streamlit-expanderHeader {
     font-family: 'Orbitron', sans-serif !important;
     background: var(--card-bg) !important;
     border: 1px solid rgba(0, 255, 255, 0.2) !important;
-    border-radius: 5px !important;
+    border-radius: 8px !important;
+    color: var(--neon-cyan) !important;
+    padding: 12px 15px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+
+.streamlit-expanderHeader:hover {
+    border-color: var(--neon-cyan) !important;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2) !important;
+}
+
+[data-testid="stExpander"] {
+    border: 1px solid rgba(0, 255, 255, 0.15) !important;
+    border-radius: 10px !important;
+    background: var(--card-bg) !important;
+    overflow: hidden;
+}
+
+[data-testid="stExpander"] > div {
+    background: transparent !important;
+}
+
+/* ============================================
+   MATERIAL ICONS/SYMBOLS FIX
+   Completely hides text like 'keyboard_arrow_down' and
+   replaces with unicode symbols
+   ============================================ */
+
+/* Material Symbols proper styling */
+.material-symbols-rounded,
+.material-symbols-outlined,
+.material-icons {
+    font-family: 'Material Symbols Rounded', 'Material Symbols Outlined', 'Material Icons' !important;
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+}
+
+/* CRITICAL FIX: Hide ALL keyboard_* text in the entire app */
+/* Target any span containing material icon text */
+span[class*="material"]:not(:empty) {
+    font-size: 0 !important;
+    color: transparent !important;
+}
+
+span[class*="material"]::before {
+    font-size: 20px !important;
+    color: var(--neon-cyan) !important;
+    font-family: sans-serif !important;
+}
+
+/* Expander arrow icons - hide text, show symbols */
+[data-testid="stExpander"] [class*="icon"],
+[data-testid="stExpander"] summary span,
+.streamlit-expanderHeader span {
+    font-size: 0 !important;
+    color: transparent !important;
+    width: 24px !important;
+    height: 24px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Expander collapsed state - down arrow */
+[data-testid="stExpander"]:not([open]) [class*="icon"]::before,
+[data-testid="stExpander"]:not([open]) summary span::before,
+.streamlit-expanderHeader span::before {
+    content: "▼" !important;
+    font-size: 12px !important;
+    color: var(--neon-cyan) !important;
+}
+
+/* Expander expanded state - up arrow */
+[data-testid="stExpander"][open] [class*="icon"]::before,
+[data-testid="stExpander"][open] summary span::before {
+    content: "▲" !important;
+    font-size: 12px !important;
+    color: var(--neon-cyan) !important;
+}
+
+/* Sidebar collapse/expand buttons */
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+[data-testid="baseButton-header"],
+button[kind="header"] {
+    font-size: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 46px !important;
+    height: 42px !important;
+    background: linear-gradient(135deg, #1a1a2e, #0f0f1a) !important;
+    border: 2px solid var(--neon-cyan) !important;
+    border-radius: 8px !important;
+}
+
+/* Hide SVG and all child spans with text */
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+[data-testid="baseButton-header"],
+button[kind="header"] {
+    display: none !important;
+}
+
+[data-testid="collapsedControl"] *,
+[data-testid="stSidebarCollapseButton"] span,
+[data-testid="baseButton-header"] span,
+button[kind="header"] span {
+    display: none !important;
+}
+
+/* Show hamburger menu for collapsed sidebar */  
+[data-testid="collapsedControl"]::before {
+    content: "☰" !important;
+    font-size: 24px !important;
+    font-family: sans-serif !important;
+    color: var(--neon-cyan) !important;
+    display: flex !important;
+}
+
+/* Show X for close sidebar button in sidebar */
+[data-testid="stSidebarCollapseButton"]::before,
+[data-testid="baseButton-header"]::before,
+button[kind="header"]::before {
+    content: "✕" !important;
+    font-size: 18px !important;
+    font-family: sans-serif !important;
+    color: var(--neon-cyan) !important;
+    display: flex !important;
+}
+
+/* Select box dropdown arrows */
+[data-testid="stSelectbox"] [class*="icon"],
+.stSelectbox svg,
+[baseweb="select"] [class*="icon"] {
+    font-size: 0 !important;
+}
+
+/* General fallback: Any element containing "keyboard" text make it invisible */
+*:not(script):not(style) {
+    text-indent: inherit;
+}
+
+/* Selectbox arrow icon replacement */
+[baseweb="select"] [class*="icon"]::before {
+    content: "▾" !important;
+    font-size: 16px !important;
     color: var(--neon-cyan) !important;
 }
 
@@ -571,6 +825,94 @@ h1, h2, h3, h4, h5, h6 {
     overflow-wrap: break-word;
 }
 
+/* ============================================
+   FILE UPLOADER - CYBERPUNK STYLE
+   ============================================ */
+
+[data-testid="stFileUploader"] {
+    background: var(--card-bg) !important;
+    border: 2px dashed rgba(0, 255, 255, 0.4) !important;
+    border-radius: 15px !important;
+    padding: 20px !important;
+    transition: all 0.3s ease !important;
+}
+
+[data-testid="stFileUploader"]:hover {
+    border-color: var(--neon-cyan) !important;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.2) !important;
+}
+
+[data-testid="stFileUploader"] section {
+    padding: 15px !important;
+}
+
+[data-testid="stFileUploader"] button {
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple)) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-family: 'Orbitron', sans-serif !important;
+    padding: 10px 20px !important;
+}
+
+/* ============================================
+   AUDIO PLAYER - CYBERPUNK STYLE
+   ============================================ */
+
+audio {
+    width: 100% !important;
+    border-radius: 10px !important;
+    filter: drop-shadow(0 0 5px rgba(0, 255, 255, 0.3)) !important;
+}
+
+audio::-webkit-media-controls-panel {
+    background: linear-gradient(135deg, #1a1a2e, #0f0f1a) !important;
+}
+
+/* ============================================
+   RADIO BUTTONS - CYBERPUNK STYLE
+   ============================================ */
+
+.stRadio > label {
+    color: var(--neon-cyan) !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-weight: 500 !important;
+}
+
+.stRadio > div {
+    background: var(--card-bg) !important;
+    border-radius: 10px !important;
+    padding: 10px 15px !important;
+}
+
+.stRadio [role="radiogroup"] {
+    gap: 15px !important;
+}
+
+/* ============================================
+   SPINNER - CYBERPUNK STYLE
+   ============================================ */
+
+.stSpinner > div {
+    border-color: var(--neon-cyan) transparent transparent transparent !important;
+}
+
+/* ============================================
+   CHECKBOX - CYBERPUNK STYLE
+   ============================================ */
+
+.stCheckbox label {
+    color: #e0e0e0 !important;
+    font-family: 'Rajdhani', sans-serif !important;
+}
+
+.stCheckbox [data-testid="stCheckbox"] {
+    background: var(--card-bg) !important;
+    border: 1px solid rgba(0, 255, 255, 0.3) !important;
+    border-radius: 5px !important;
+    padding: 8px 12px !important;
+}
+
 </style>
 """
 
@@ -632,3 +974,193 @@ def get_score_bar(score: float, label: str = "") -> str:
         </div>
     </div>
     """
+
+
+# Hamburger menu button to toggle sidebar
+SIDEBAR_TOGGLE_BUTTON = """
+<style>
+/* ============================================
+   SIDEBAR TOGGLE BUTTON STYLING
+   Works for both expanded and collapsed states
+   ============================================ */
+
+/* Style the collapsed state toggle (appears when sidebar is hidden) */
+[data-testid="collapsedControl"] {
+    background: linear-gradient(135deg, #1a1a2e, #0f0f1a) !important;
+    border: 2px solid #00ffff !important;
+    border-radius: 8px !important;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3) !important;
+    top: 14px !important;
+    left: 14px !important;
+    width: 46px !important;
+    height: 42px !important;
+    padding: 0 !important;
+    transition: all 0.3s ease !important;
+    overflow: hidden !important;
+}
+
+[data-testid="collapsedControl"]:hover {
+    background: linear-gradient(135deg, #2a2a4e, #1f1f3a) !important;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.6) !important;
+    transform: scale(1.05) !important;
+    border-color: #ff00ff !important;
+}
+
+/* Hide the SVG icon and any text */
+[data-testid="collapsedControl"] svg,
+[data-testid="collapsedControl"] span {
+    display: none !important;
+}
+
+/* Create hamburger icon using pseudo-element */
+[data-testid="collapsedControl"]::before {
+    content: "≡";
+    font-size: 28px !important;
+    color: #00ffff !important;
+    text-shadow: 0 0 10px #00ffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    line-height: 38px !important;
+}
+
+[data-testid="collapsedControl"]:hover::before {
+    color: #ff00ff !important;
+    text-shadow: 0 0 15px #ff00ff !important;
+}
+
+/* Style the close/collapse button inside the sidebar (X button) */
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebar"] button[kind="header"],
+[data-testid="stSidebar"] [data-testid="baseButton-header"] {
+    background: linear-gradient(135deg, #1a1a2e, #0f0f1a) !important;
+    border: 2px solid #00ffff !important;
+    border-radius: 8px !important;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3) !important;
+    transition: all 0.3s ease !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]:hover,
+[data-testid="stSidebar"] button[kind="header"]:hover,
+[data-testid="stSidebar"] [data-testid="baseButton-header"]:hover {
+    background: linear-gradient(135deg, #2a2a4e, #1f1f3a) !important;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.6) !important;
+    border-color: #ff00ff !important;
+    transform: scale(1.05) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg,
+[data-testid="stSidebar"] button[kind="header"] svg,
+[data-testid="stSidebar"] [data-testid="baseButton-header"] svg {
+    stroke: #00ffff !important;
+    transition: all 0.3s ease !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]:hover svg,
+[data-testid="stSidebar"] button[kind="header"]:hover svg,
+[data-testid="stSidebar"] [data-testid="baseButton-header"]:hover svg {
+    stroke: #ff00ff !important;
+}
+</style>
+"""
+
+# JavaScript injection to hide keyboard text and fix icon rendering
+ICON_FIX_SCRIPT = """
+<script>
+// Function to hide keyboard text and replace with icons
+function fixKeyboardIcons() {
+    // Find all elements that might contain keyboard text
+    const allElements = document.querySelectorAll('*');
+    
+    allElements.forEach(el => {
+        // Skip script and style elements
+        if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
+        
+        // Check direct text content
+        if (el.childNodes.length === 1 && el.childNodes[0].nodeType === 3) {
+            const text = el.textContent.trim();
+            
+            // Replace keyboard icon text with symbols
+            if (text.includes('keyboard_double_arrow_right')) {
+                el.textContent = '»';
+                el.style.fontSize = '24px';
+                el.style.color = '#00ffff';
+            } else if (text.includes('keyboard_double_arrow_left')) {
+                el.textContent = '«';
+                el.style.fontSize = '24px';
+                el.style.color = '#00ffff';
+            } else if (text.includes('keyboard_arrow_down')) {
+                el.textContent = '▼';
+                el.style.fontSize = '14px';
+                el.style.color = '#00ffff';
+            } else if (text.includes('keyboard_arrow_up')) {
+                el.textContent = '▲';
+                el.style.fontSize = '14px';
+                el.style.color = '#00ffff';
+            } else if (text.includes('keyboard_arrow_right')) {
+                el.textContent = '›';
+                el.style.fontSize = '20px';
+                el.style.color = '#00ffff';
+            } else if (text.includes('keyboard_arrow_left')) {
+                el.textContent = '‹';
+                el.style.fontSize = '20px';
+                el.style.color = '#00ffff';
+            } else if (text.includes('close')) {
+                el.textContent = '✕';
+                el.style.fontSize = '18px';
+                el.style.color = '#00ffff';
+            } else if (text.includes('expand_more')) {
+                el.textContent = '▼';
+                el.style.fontSize = '14px';
+                el.style.color = '#00ffff';
+            } else if (text.includes('expand_less')) {
+                el.textContent = '▲';
+                el.style.fontSize = '14px';
+                el.style.color = '#00ffff';
+            }
+        }
+    });
+    
+    // Also target the collapsed control button specifically
+    const collapsedControl = document.querySelector('[data-testid="collapsedControl"]');
+    if (collapsedControl) {
+        // Find any text nodes and replace
+        const walker = document.createTreeWalker(
+            collapsedControl,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+        
+        let node;
+        while (node = walker.nextNode()) {
+            if (node.textContent.includes('keyboard')) {
+                node.textContent = '';
+            }
+        }
+    }
+}
+
+// Run on page load and periodically to catch dynamic content
+document.addEventListener('DOMContentLoaded', fixKeyboardIcons);
+setTimeout(fixKeyboardIcons, 500);
+setTimeout(fixKeyboardIcons, 1000);
+setTimeout(fixKeyboardIcons, 2000);
+setTimeout(fixKeyboardIcons, 3000);
+
+// Also observe for DOM changes
+const observer = new MutationObserver(function(mutations) {
+    fixKeyboardIcons();
+});
+
+// Start observing once DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+});
+</script>
+"""
